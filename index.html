@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BSG Grup İçi Değerlendirme</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Firebase JS SDK -->
+    <script type="module">
+        // Firebase Modüllerini Import Et
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, doc, setDoc, onSnapshot, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- GLOBAL DEĞİŞKENLER ---
+
+        // Firebase ve Uygulama Konfigürasyonu
+        // Bu değişkenler Canvas ortamı tarafından otomatik olarak sağlanacaktır.
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : { apiKey: "const firebaseConfig = {
+    apiKey: "AIzaSyAGo1xQfMUvDMzcnWQLrTAA_zGTB_h96Jk",
+    authDomain: "bsg-grup-ici-degerlendirme.firebaseapp.com",
+    projectId: "bsg-grup-ici-degerlendirme",
+    storageBucket: "bsg-grup-ici-degerlendirme.firebasestorage.app",
+    messagingSenderId: "36504836557",
+    appId: "1:36504836557:web:cda47796201a5c0e4d4c84"
+  };", authDomain: "YOUR_AUTH_DOMAIN", projectId: "YOUR_PROJECT_ID" };
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        
+        let db, auth;
+        let currentUserId = null;
+        let allRatingsData = []; // Tüm veritabanı verilerini saklar
+        let allTimeDataCache = {}; // Hesaplanmış verileri saklar
+
+        // Veri Yolu
+        const RATING_COLLECTION_PATH = `artifacts/${appId}/public/data/ratings`;
+
+        // Gruptaki Kişiler
+        const userList = [
+            "Enes Malik Arı",
+            "İbrahim Kerem Güven",
+            "Oğuzhan Erdoğan",
+            "Özgün Deniz Sevilmiş",
+            "Selanur Ayaz",
+            "Semih Tepe",
+            "Sena Ateş",
+            "Sude Demir",
+            "Sudem Cücemen",
+            "Şerif Bayram",
+            "Uğur Berktaş"
+        ].sort((a, b) => a.localeCompare(b, 'tr')); // Alfabetik sırala
+
+        // Puanlama Kriterleri ve Ağırlıkları
+        const criteria = [
+            { id: "katilim", name: "Toplantıya Katılım", weight: 1 },
+            { id: "zorunlu", name: "Zorunlu Yük", weight: 1 },
+            { id: "ekstra", name: "Ekstra Yük", weight: 0.75 },
+            { id: "yardim", name: "Yardım", weight: 0.75 },
+            { id: "bilgi", name: "Bilgi Paylaşımı", weight: 0.5 }
+        ];
+        const totalWeight = criteria.reduce((sum, c) => sum + c.weight, 0); // Toplam ağırlık = 4
+
+        // --- UTILITY FONKSİYONLARI ---
+
+        /**
+         * Geçerli ISO hafta numarasını alır (Örn: "2025-W45")
+         */
+        function getCurrentWeekISO() {
+            const date = new Date();
+            date.setHours(0, 0, 0, 0);
+            // Perşembe'yi haftanın ana günü yap (ISO 8601)
+            date.setDate(date.getDate() + 3 - (date.getDay() + 6) % 7);
+            const week1 = new Date(date.getFullYear(), 0, 4);
+            const weekNumber = 1 + Math.round(((date.getTime() - week1.getTime()) / 86400000 - 3 + (week1.getDay() + 6) % 7) / 7);
+            return `${date.getFullYear()}-W${weekNumber.toString().padStart(2, '0')}`;
+        }
+
+        /**
+         * Kullanıcıya özel bir bildirim (toast) gösterir.
+         */
+        function showToast(message, isError = false) {
+            const toast = document.getElementById("toast-notification");
+            const toastMessage = document.getElementById("toast-message");
+            
+            toastMessage.textContent = message;
+            if (isError) {
+                toast.classList.replace("bg-green-500", "bg-red-500");
+            } else {
+                toast.classList.replace("bg-red-500", "bg-green-500");
+            }
+            
+            toast.classList.remove("opacity-0", "-translate-y-12");
+            toast.classList.add("opacity-100", "translate-y-0");
+            
+            setTimeout(() => {
+                toast.classList.remove("opacity-100", "translate-y-0");
+                toast.classList.add("opacity-0", "-translate-y-12");
+            }, 3000);
+        }
+
+        // --- ANA VERİ İŞLEME MANTIĞI ---
+
+        /**
+         * Firestore'dan gelen tüm puanlama verilerini işler.
+         * Her kullanıcının haftalık puanlarını ve genel ortalamasını hesaplar.
+         */
+        function processData(ratingDocs) {
+            const currentWeek = getCurrentWeekISO();
+            
+            // 1. Puanlamaları haftaya göre grupla
+            const ratingsByWeek = {};
+            ratingDocs.forEach(doc => {
+                const data = doc.data();
+                if (!ratingsByWeek[data.week]) {
+                    ratingsByWeek[data.week] = [];
+                }
+                ratingsByWeek[data.week].push(data);
+            });
+
+            // 2. Her kullanıcı için genel bir veri yapısı oluştur
+            const allTimeData = {};
+            userList.forEach(name => {
+                allTimeData[name] = {
+                    name: name,
+                    weeklyScores: [], // { week: "2025-W45", score: 87.5 }
+                    averageScore: 0
+                };
+            });
+
+            // 3. Her haftayı ayrı ayrı hesapla
+            for (const week in ratingsByWeek) {
+                const submissions = ratingsByWeek[week];
+                const scoresReceivedThisWeek = {};
+                userList.forEach(name => {
+                    scoresReceivedThisWeek[name] = []; // Her kullanıcının aldığı puanları tutan dizi
+                });
+
+                // Her bir puanlama gönderimini (submission) işle
+                submissions.forEach(submission => {
+                    // Gönderim içindeki her bir puanlamayı (rating) işle
+                    for (const targetName in submission.ratings) {
+                        if (scoresReceivedThisWeek[targetName]) {
+                            const scores = submission.ratings[targetName];
+                            let weightedSum = 0;
+                            
+                            // Ağırlıklı toplamı hesapla
+                            criteria.forEach(c => {
+                                weightedSum += (scores[c.id] || 0) * c.weight;
+                            });
+
+                            // 100'lük sisteme dönüştür (Toplam Ağırlık 4, 4 * 25 = 100)
+                            const score_100 = weightedSum * (100 / totalWeight);
+                            scoresReceivedThisWeek[targetName].push(score_100);
+                        }
+                    }
+                });
+
+                // O hafta için her kullanıcının ortalama puanını hesapla
+                userList.forEach(name => {
+                    const received = scoresReceivedThisWeek[name];
+                    let finalWeekScore = 0;
+                    if (received.length > 0) {
+                        const total = received.reduce((a, b) => a + b, 0);
+                        finalWeekScore = total / received.length;
+                    }
+                    allTimeData[name].weeklyScores.push({ week: week, score: finalWeekScore });
+                });
+            }
+
+            // 4. Her kullanıcı için genel ortalamayı hesapla
+            userList.forEach(name => {
+                const scores = allTimeData[name].weeklyScores;
+                if (scores.length > 0) {
+                    const total = scores.reduce((sum, s) => sum + s.score, 0);
+                    allTimeData[name].averageScore = total / scores.length;
+                }
+            });
+
+            allTimeDataCache = allTimeData; // Sonuçları önbelleğe al
+            return allTimeData;
+        }
+
+        // --- ARAYÜZ GÜNCELLEME (RENDER) FONKSİYONLARI ---
+
+        /**
+         * Puanlayan kişi seçildiğinde puanlama formunu oluşturur.
+         */
+        function renderRatingForm() {
+            const raterName = document.getElementById("rater-select").value;
+            const formContainer = document.getElementById("rating-form-container");
+            const formTableBody = document.getElementById("rating-form-table-body");
+            const submitButton = document.getElementById("submit-button");
+
+            formTableBody.innerHTML = ""; // Formu temizle
+
+            if (!raterName) {
+                formContainer.classList.add("hidden");
+                return;
+            }
+            
+            formContainer.classList.remove("hidden");
+            submitButton.disabled = false; // Gönder butonunu aktifleştir
+
+            // Puanlayan kişi dışındaki herkes için bir satır oluştur
+            userList.forEach(targetName => {
+                if (targetName === raterName) return; // Kendini puanlayamaz
+
+                const tr = document.createElement("tr");
+                tr.className = "border-b border-gray-200";
+
+                // Kişi adı hücresi
+                const tdName = document.createElement("td");
+                tdName.className = "py-3 px-2 text-sm font-medium text-gray-800";
+                tdName.textContent = targetName;
+                tr.appendChild(tdName);
+
+                // Kriterler için puanlama butonları
+                criteria.forEach(c => {
+                    const tdCrit = document.createElement("td");
+                    tdCrit.className = "py-3 px-2";
+                    
+                    const fieldId = `rating-${targetName.replace(/\s+/g, '-')}-${c.id}`;
+                    
+                    tdCrit.innerHTML = `
+                        <div class="flex items-center justify-center space-x-1">
+                            <!-- +1 Puan -->
+                            <input type="radio" id="${fieldId}-plus" name="${fieldId}" value="1" class="hidden peer/plus">
+                            <label for="${fieldId}-plus" class="w-6 h-6 flex items-center justify-center rounded-full cursor-pointer text-sm font-bold text-green-800 bg-green-200 hover:bg-green-300 peer-checked/plus:bg-green-600 peer-checked/plus:text-white transition-all">+</label>
+                            
+                            <!-- 0 Puan (Varsayılan) -->
+                            <input type="radio" id="${fieldId}-zero" name="${fieldId}" value="0" class="hidden peer/zero" checked>
+                            <label for="${fieldId}-zero" class="w-6 h-6 flex items-center justify-center rounded-full cursor-pointer text-sm font-bold text-gray-800 bg-gray-200 hover:bg-gray-300 peer-checked/zero:bg-gray-500 peer-checked/zero:text-white transition-all">0</label>
+                            
+                            <!-- -1 Puan -->
+                            <input type="radio" id="${fieldId}-minus" name="${fieldId}" value="-1" class="hidden peer/minus">
+                            <label for="${fieldId}-minus" class="w-6 h-6 flex items-center justify-center rounded-full cursor-pointer text-sm font-bold text-red-800 bg-red-200 hover:bg-red-300 peer-checked/minus:bg-red-600 peer-checked/minus:text-white transition-all">-</label>
+                        </div>
+                    `;
+                    tr.appendChild(tdCrit);
+                });
+
+                formTableBody.appendChild(tr);
+            });
+        }
+
+        /**
+         * "Haftalık Puan Durumu" tablosunu günceller.
+         */
+        function renderResultsTable(allTimeData) {
+            const tableBody = document.getElementById("results-table-body");
+            const currentWeek = getCurrentWeekISO();
+            tableBody.innerHTML = ""; // Tabloyu temizle
+
+            userList.forEach(name => {
+                const userData = allTimeData[name];
+                if (!userData) return;
+
+                const currentWeekData = userData.weeklyScores.find(s => s.week === currentWeek);
+                const currentWeekScore = currentWeekData ? currentWeekData.score : 0;
+                const averageScore = userData.averageScore;
+
+                const tr = document.createElement("tr");
+                tr.className = "border-b border-gray-200 hover:bg-gray-50";
+
+                tr.innerHTML = `
+                    <td class="py-3 px-4 text-sm font-medium text-gray-900">${name}</td>
+                    <td class="py-3 px-4 text-sm text-gray-700 text-center">${currentWeekScore.toFixed(2)}</td>
+                    <td class="py-3 px-4 text-sm text-gray-700 text-center font-semibold ${averageScore > 0 ? 'text-blue-600' : (averageScore < 0 ? 'text-red-600' : 'text-gray-700')}">
+                        ${averageScore.toFixed(2)}
+                    </td>
+                `;
+                tableBody.appendChild(tr);
+            });
+        }
+
+        /**
+         * "Haftanın Yıldızı" ve "Haftaların Yıldızı" tablolarını günceller.
+         */
+        function renderStarTables(allTimeData) {
+            const currentWeek = getCurrentWeekISO();
+            const weekStarsList = document.getElementById("week-stars-list");
+            const allTimeStarsList = document.getElementById("all-time-stars-list");
+
+            weekStarsList.innerHTML = "";
+            allTimeStarsList.innerHTML = "";
+
+            const weeklyScores = userList.map(name => {
+                const userData = allTimeData[name];
+                const currentWeekData = userData.weeklyScores.find(s => s.week === currentWeek);
+                return {
+                    name: name,
+                    score: currentWeekData ? currentWeekData.score : 0
+                };
+            });
+
+            const averageScores = userList.map(name => {
+                return {
+                    name: name,
+                    score: allTimeData[name].averageScore
+                };
+            });
+
+            // Haftanın Yıldızları
+            const maxWeeklyScore = Math.max(...weeklyScores.map(u => u.score));
+            const haftaninYildizlari = weeklyScores
+                .filter(u => u.score === maxWeeklyScore && u.score > 0) // Sadece 0'dan büyük en yüksek puanları al
+                .sort((a, b) => a.name.localeCompare(b.name, 'tr')); // Alfabetik sırala
+
+            // Haftaların Yıldızları
+            const maxAverageScore = Math.max(...averageScores.map(u => u.score));
+            const haftalarinYildizlari = averageScores
+                .filter(u => u.score === maxAverageScore && u.score > 0) // Sadece 0'dan büyük en yüksek puanları al
+                .sort((a, b) => a.name.localeCompare(b.name, 'tr')); // Alfabetik sırala
+            
+            // Listeleri doldur (en fazla 11 satır)
+            const populateList = (listEl, stars, placeholder) => {
+                if (stars.length === 0) {
+                    listEl.innerHTML = `<li class="text-sm text-gray-500 italic px-3 py-2">${placeholder}</li>`;
+                } else {
+                    stars.forEach(star => {
+                        listEl.innerHTML += `
+                            <li class="flex items-center justify-between px-3 py-2 bg-white/50 rounded-md mb-1">
+                                <span class="font-medium text-gray-800">${star.name}</span>
+                                <span class="font-bold text-yellow-600">${star.score.toFixed(2)}</span>
+                            </li>
+                        `;
+                    });
+                }
+                // Kalan 11 satırı boşlukla doldurma (isteğe bağlı, istenmişti)
+                const remaining = 11 - stars.length;
+                for(let i=0; i < remaining && stars.length > 0; i++) {
+                     listEl.innerHTML += `<li class="px-3 py-2 h-9 mb-1"></li>`;
+                }
+            };
+
+            populateList(weekStarsList, haftaninYildizlari, "Bu hafta henüz yıldız yok.");
+            populateList(allTimeStarsList, haftalarinYildizlari, "Genel sıralamada henüz yıldız yok.");
+        }
+
+
+        // --- EVENT HANDLERS ---
+
+        /**
+         * Puanlama formunu veritabanına gönderir.
+         */
+        async function handleSubmit(e) {
+            e.preventDefault();
+            const submitButton = document.getElementById("submit-button");
+            submitButton.disabled = true;
+            submitButton.textContent = "Gönderiliyor...";
+
+            try {
+                const raterName = document.getElementById("rater-select").value;
+                const currentWeek = getCurrentWeekISO();
+                
+                if (!raterName) {
+                    throw new Error("Puanlayan kişi seçilmedi.");
+                }
+
+                const ratings = {};
+                
+                // Formdaki tüm girdileri topla
+                userList.forEach(targetName => {
+                    if (targetName === raterName) return;
+
+                    const targetRatings = {};
+                    let formIsValid = true;
+                    
+                    criteria.forEach(c => {
+                        const fieldId = `rating-${targetName.replace(/\s+/g, '-')}-${c.id}`;
+                        const checkedInput = document.querySelector(`input[name="${fieldId}"]:checked`);
+                        
+                        if (checkedInput) {
+                            targetRatings[c.id] = parseInt(checkedInput.value, 10);
+                        } else {
+                            // Bu durum olmamalı (varsayılan '0' olduğu için), ama kontrol edelim
+                            formIsValid = false;
+                        }
+                    });
+
+                    if (formIsValid) {
+                        ratings[targetName] = targetRatings;
+                    }
+                });
+
+                // Firestore dökümanını oluştur
+                const docId = `rating_${currentWeek}_by_${raterName.replace(/\s+/g, '_')}`;
+                const payload = {
+                    rater: raterName,
+                    week: currentWeek,
+                    ratings: ratings,
+                    submittedAt: new Date().toISOString()
+                };
+
+                // Veriyi Firestore'a yaz (setDoc ile üzerine yaz)
+                const docRef = doc(db, RATING_COLLECTION_PATH, docId);
+                await setDoc(docRef, payload);
+
+                showToast("Puanlama başarıyla gönderildi!");
+                
+                // Formu sıfırla (isteğe bağlı, seçimi sıfırlayabilir)
+                // document.getElementById("rater-select").value = "";
+                // renderRatingForm();
+
+            } catch (error) {
+                console.error("Puanlama gönderilirken hata:", error);
+                showToast("Bir hata oluştu: " + error.message, true);
+            } finally {
+                submitButton.disabled = false;
+                submitButton.textContent = "Puanlamayı Gönder";
+            }
+        }
+
+        // --- UYGULAMA BAŞLANGICI ---
+
+        /**
+         * Uygulamayı başlatır.
+         */
+        async function initApp() {
+            try {
+                // Firebase'i başlat
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+                
+                // Firestore log seviyesini ayarla (debug için)
+                // setLogLevel('debug');
+
+                // Puanlayan kişi (rater) dropdown menüsünü doldur
+                const raterSelect = document.getElementById("rater-select");
+                userList.forEach(name => {
+                    const option = document.createElement("option");
+                    option.value = name;
+                    option.textContent = name;
+                    raterSelect.appendChild(option);
+                });
+                
+                // Geçerli haftayı göster
+                document.getElementById("current-week").textContent = getCurrentWeekISO();
+
+                // Event Listeners
+                raterSelect.addEventListener("change", renderRatingForm);
+                document.getElementById("rating-form").addEventListener("submit", handleSubmit);
+
+                // Firebase Auth ile giriş yap
+                onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        console.log("Kullanıcı giriş yaptı:", user.uid);
+                        currentUserId = user.uid;
+                        // Ana veri dinleyicisini başlat
+                        subscribeToRatings();
+                    } else {
+                        console.log("Kullanıcı giriş yapmamış, anonim giriş deneniyor.");
+                        // Token kontrolü
+                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                            signInWithCustomToken(auth, __initial_auth_token).catch(err => {
+                                console.error("Custom token ile giriş hatası:", err);
+                                signInAnonymously(auth); // Token başarısız olursa anonime dön
+                            });
+                        } else {
+                            signInAnonymously(auth); // Token yoksa anonim giriş yap
+                        }
+                    }
+                });
+
+            } catch (error) {
+                console.error("Uygulama başlatılırken hata:", error);
+                document.body.innerHTML = `<div class="p-8 text-red-600">Uygulama yüklenirken kritik bir hata oluştu: ${error.message}</div>`;
+            }
+        }
+
+        /**
+         * Veritabanındaki değişiklikleri dinler ve arayüzü günceller.
+         */
+        function subscribeToRatings() {
+            const q = collection(db, RATING_COLLECTION_PATH);
+            
+            // Yükleniyor göstergesini göster
+            document.getElementById("loading-indicator").classList.remove("hidden");
+            document.getElementById("results-content").classList.add("hidden");
+
+            onSnapshot(q, (snapshot) => {
+                console.log("Veri güncellendi, snapshot alındı.");
+                allRatingsData = snapshot.docs; // Tüm dökümanları al
+
+                // Veriyi işle
+                const allTimeData = processData(allRatingsData);
+                
+                // Arayüzü güncelle
+                renderResultsTable(allTimeData);
+                renderStarTables(allTimeData);
+                
+                // Yükleniyor göstergesini gizle
+                document.getElementById("loading-indicator").classList.add("hidden");
+                document.getElementById("results-content").classList.remove("flex"); // flex'i kaldır
+                document.getElementById("results-content").classList.remove("hidden"); // hidden'ı kaldır
+
+            }, (error) => {
+                console.error("Firestore dinleyicisinde hata:", error);
+                showToast("Veriler yüklenirken bir hata oluştu.", true);
+                document.getElementById("loading-indicator").textContent = "Veri yüklenemedi.";
+            });
+        }
+
+        // DOM yüklendiğinde uygulamayı başlat
+        document.addEventListener("DOMContentLoaded", initApp);
+
+    </script>
+    
+    <!-- Özel Stil (Radyo butonlar için) -->
+    <style>
+        /* Firefox'ta gizli radyo butonların odaklanma halkasını gizle */
+        input[type="radio"].hidden:focus + label {
+            outline: 2px solid transparent;
+            outline-offset: 2px;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-100 font-sans antialiased">
+
+    <!-- Ana Konteyner -->
+    <div class="container mx-auto max-w-7xl my-8 p-4">
+    
+        <!-- Başlık -->
+        <header class="bg-gradient-to-r from-blue-800 to-blue-600 text-white p-6 rounded-t-lg shadow-md">
+            <h1 class="text-2xl sm:text-3xl font-bold">BSG Grup İçi Değerlendirme</h1>
+            <p class="text-sm text-blue-100">Haftalık performans ve katkı değerlendirme formu.</p>
+        </header>
+
+        <!-- Ana İçerik Alanı (Form ve Tablolar) -->
+        <div class="bg-white shadow-lg rounded-b-lg flex flex-col lg:flex-row">
+
+            <!-- Sol Taraf: Puanlama Formu -->
+            <div class="w-full lg:w-1/2 p-4 sm:p-6 border-b lg:border-b-0 lg:border-r border-gray-200">
+                <h2 class="text-xl font-semibold text-gray-800 mb-4">Değerlendirme Formu</h2>
+                
+                <!-- Puanlayan Kişi Seçimi -->
+                <div class="mb-4">
+                    <label for="rater-select" class="block text-sm font-medium text-gray-700 mb-1">Puanlayan Kişi:</label>
+                    <select id="rater-select" class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                        <option value="">Lütfen adınızı seçin...</option>
+                        <!-- Seçenekler JS ile eklenecek -->
+                    </select>
+                </div>
+
+                <!-- Puanlama Formu Konteyneri (Dinamik) -->
+                <div id="rating-form-container" class="hidden">
+                    <div class="flex justify-between items-center mb-3">
+                         <h3 class="text-lg font-medium text-gray-700">Puanlama Tablosu</h3>
+                         <span class="text-sm font-semibold text-blue-600 bg-blue-100 px-3 py-1 rounded-full" id="current-week"></span>
+                    </div>
+                   
+                    <form id="rating-form">
+                        <div class="overflow-x-auto border border-gray-200 rounded-lg">
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="py-3 px-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Kişi</th>
+                                        <!-- Kriter Başlıkları JS ile oluşturulabilir veya sabit kalabilir -->
+                                        <th class="py-3 px-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" title="Toplantıya Katılım (1)">Katılım</th>
+                                        <th class="py-3 px-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" title="Zorunlu Yük (1)">Z. Yük</th>
+                                        <th class="py-3 px-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" title="Ekstra Yük (0.75)">E. Yük</th>
+                                        <th class="py-3 px-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" title="Yardım (0.75)">Yardım</th>
+                                        <th class="py-3 px-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" title="Bilgi Paylaşımı (0.5)">Bilgi</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="rating-form-table-body" class="bg-white divide-y divide-gray-200">
+                                    <!-- Form satırları JS ile eklenecek -->
+                                </tbody>
+                            </table>
+                        </div>
+                        <button type="submit" id="submit-button" class="mt-6 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-lg shadow-md transition duration-300 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed">
+                            Puanlamayı Gönder
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Sağ Taraf: Sonuçlar ve Tablolar -->
+            <div class="w-full lg:w-1/2 p-4 sm:p-6">
+                <h2 class="text-xl font-semibold text-gray-800 mb-4">Sonuçlar ve Puan Durumu</h2>
+
+                <!-- Yükleniyor Göstergesi -->
+                <div id="loading-indicator" class="flex items-center justify-center h-64">
+                    <svg class="animate-spin -ml-1 mr-3 h-8 w-8 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span class="text-lg text-gray-600">Sonuçlar yükleniyor...</span>
+                </div>
+
+                <!-- Sonuç İçeriği (Yüklenince görünür) -->
+                <div id="results-content" class="hidden">
+                    
+                    <!-- Haftalık Puan Durumu Tablosu -->
+                    <div class="mb-6">
+                        <h3 class="text-lg font-medium text-gray-700 mb-2">Haftalık Puan Durumu</h3>
+                        <div class="border border-gray-200 rounded-lg overflow-hidden shadow-sm">
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Kişi</th>
+                                        <th class="py-3 px-4 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Bu Hafta Puanı</th>
+                                        <th class="py-3 px-4 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Genel Ortalama</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="results-table-body" class="bg-white divide-y divide-gray-200">
+                                    <!-- Sonuç satırları JS ile eklenecek -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <!-- Yıldız Tabloları -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        
+                        <!-- Haftanın Yıldızı -->
+                        <div class="bg-yellow-50 border border-yellow-300 rounded-lg p-4 shadow-sm">
+                            <h4 class="text-lg font-semibold text-yellow-800 mb-3 flex items-center">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                                </svg>
+                                Haftanın Yıldızı
+                            </h4>
+                            <ul id="week-stars-list" class="space-y-1">
+                                <!-- JS ile doldurulacak (max 11 satır) -->
+                            </ul>
+                        </div>
+                        
+                        <!-- Haftaların Yıldızı -->
+                        <div class="bg-purple-50 border border-purple-300 rounded-lg p-4 shadow-sm">
+                            <h4 class="text-lg font-semibold text-purple-800 mb-3 flex items-center">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fill-rule="evenodd" d="M5 2a1 1 0 00-1 1v1H3a1 1 0 00-1 1v12a1 1 0 001 1h14a1 1 0 001-1V5a1 1 0 00-1-1h-1V3a1 1 0 00-1-1H5zM2 5h16v12H2V5zm1.5 6a.5.5 0 01.5-.5h3a.5.5 0 01.5.5v3a.5.5 0 01-.5.5h-3a.5.5 0 01-.5-.5v-3zm6.5.5a.5.5 0 00-.5-.5h3a.5.5 0 00.5.5v3a.5.5 0 00.5.5h3a.5.5 0 00.5-.5v-3a.5.5 0 00-.5-.5h-3a.5.5 0 00-.5.5v3z" clip-rule="evenodd" />
+                                </svg>
+                                Haftaların Yıldızı
+                            </h4>
+                            <ul id="all-time-stars-list" class="space-y-1">
+                                <!-- JS ile doldurulacak (max 11 satır) -->
+                            </ul>
+                        </div>
+                    </div>
+                    
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Bildirim -->
+    <div id="toast-notification" class="fixed top-5 right-5 w-auto max-w-sm p-4 bg-green-500 text-white rounded-lg shadow-lg opacity-0 -translate-y-12 transform transition-all duration-300 ease-in-out z-50">
+        <p id="toast-message" class="font-medium">Puanlama başarıyla gönderildi!</p>
+    </div>
+
+</body>
+</html>
