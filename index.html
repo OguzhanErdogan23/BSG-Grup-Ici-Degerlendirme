@@ -4,10 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BSG Grup İçi Değerlendirme</title>
-    <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Firebase JS SDK -->
-    <script type="module">
+    <!-- Tailwind CSS CDN --><script src="https://cdn.tailwindcss.com"></script>
+    <!-- Firebase JS SDK --><script type="module">
         // Firebase Modüllerini Import Et
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
@@ -55,7 +53,7 @@
             { id: "katilim", name: "Toplantıya Katılım", weight: 1 },
             { id: "zorunlu", name: "Zorunlu Görev", weight: 1 },
             { id: "ekstra", name: "Ekstra Görev", weight: 0.75 },
-            { id: "yardim", name: "Yardım", weight: 0.75 },
+            { id: "yardim", name: "Görev Desteği", weight: 0.75 },
             { id: "bilgi", name: "Bilgi Paylaşımı", weight: 0.5 }
         ];
         const totalWeight = criteria.reduce((sum, c) => sum + c.weight, 0); // Toplam ağırlık = 4
@@ -223,16 +221,13 @@
                     
                     tdCrit.innerHTML = `
                         <div class="flex items-center justify-center space-x-1">
-                            <!-- +1 Puan -->
-                            <input type="radio" id="${fieldId}-plus" name="${fieldId}" value="1" class="hidden peer/plus">
+                            <!-- +1 Puan --><input type="radio" id="${fieldId}-plus" name="${fieldId}" value="1" class="hidden peer/plus">
                             <label for="${fieldId}-plus" class="w-6 h-6 flex items-center justify-center rounded-full cursor-pointer text-sm font-bold text-green-800 bg-green-200 hover:bg-green-300 peer-checked/plus:bg-green-600 peer-checked/plus:text-white transition-all">+</label>
                             
-                            <!-- 0 Puan (Varsayılan) -->
-                            <input type="radio" id="${fieldId}-zero" name="${fieldId}" value="0" class="hidden peer/zero" checked>
+                            <!-- 0 Puan (Varsayılan) --><input type="radio" id="${fieldId}-zero" name="${fieldId}" value="0" class="hidden peer/zero" checked>
                             <label for="${fieldId}-zero" class="w-6 h-6 flex items-center justify-center rounded-full cursor-pointer text-sm font-bold text-gray-800 bg-gray-200 hover:bg-gray-300 peer-checked/zero:bg-gray-500 peer-checked/zero:text-white transition-all">0</label>
                             
-                            <!-- -1 Puan -->
-                            <input type="radio" id="${fieldId}-minus" name="${fieldId}" value="-1" class="hidden peer/minus">
+                            <!-- -1 Puan --><input type="radio" id="${fieldId}-minus" name="${fieldId}" value="-1" class="hidden peer/minus">
                             <label for="${fieldId}-minus" class="w-6 h-6 flex items-center justify-center rounded-full cursor-pointer text-sm font-bold text-red-800 bg-red-200 hover:bg-red-300 peer-checked/minus:bg-red-600 peer-checked/minus:text-white transition-all">-</label>
                         </div>
                     `;
@@ -274,7 +269,7 @@
         }
 
         /**
-         * "Haftanın Yıldızı" ve "Haftaların Yıldızı" tablolarını günceller.
+         * "Haftanın Yıldızı" ve "Projenin Yıldızı" tablolarını günceller.
          */
         function renderStarTables(allTimeData) {
             const currentWeek = getCurrentWeekISO();
@@ -306,9 +301,9 @@
                 .filter(u => u.score === maxWeeklyScore && u.score > 0) // Sadece 0'dan büyük en yüksek puanları al
                 .sort((a, b) => a.name.localeCompare(b.name, 'tr')); // Alfabetik sırala
 
-            // Haftaların Yıldızları
+            // Projenin Yıldızları
             const maxAverageScore = Math.max(...averageScores.map(u => u.score));
-            const haftalarinYildizlari = averageScores
+            const projeninYildizlari = averageScores
                 .filter(u => u.score === maxAverageScore && u.score > 0) // Sadece 0'dan büyük en yüksek puanları al
                 .sort((a, b) => a.name.localeCompare(b.name, 'tr')); // Alfabetik sırala
             
@@ -334,7 +329,7 @@
             };
 
             populateList(weekStarsList, haftaninYildizlari, "Bu hafta henüz yıldız yok.");
-            populateList(allTimeStarsList, haftalarinYildizlari, "Genel sıralamada henüz yıldız yok.");
+            populateList(allTimeStarsList, projeninYildizlari, "Genel sıralamada henüz yıldız yok.");
         }
 
 
@@ -475,7 +470,7 @@
         function subscribeToRatings() {
             const q = collection(db, RATING_COLLECTION_PATH);
             
-            // Yükleniyor göstergesini göster
+            // Yükleniyor Göstergesini göster
             document.getElementById("loading-indicator").classList.remove("hidden");
             document.getElementById("results-content").classList.add("hidden");
 
@@ -495,6 +490,7 @@
                 document.getElementById("results-content").classList.remove("flex"); // flex'i kaldır
                 document.getElementById("results-content").classList.remove("hidden"); // hidden'ı kaldır
 
+
             }, (error) => {
                 console.error("Firestore dinleyicisinde hata:", error);
                 showToast("Veriler yüklenirken bir hata oluştu.", true);
@@ -507,8 +503,7 @@
 
     </script>
     
-    <!-- Özel Stil (Radyo butonlar için) -->
-    <style>
+    <!-- Özel Stil (Radyo butonlar için) --><style>
         /* Firefox'ta gizli radyo butonların odaklanma halkasını gizle */
         input[type="radio"].hidden:focus + label {
             outline: 2px solid transparent;
@@ -519,33 +514,26 @@
 
 <body class="bg-gray-100 font-sans antialiased">
 
-    <!-- Ana Konteyner -->
-    <div class="container mx-auto max-w-7xl my-8 p-4">
+    <!-- Ana Konteyner --><div class="container mx-auto max-w-7xl my-8 p-4">
     
-        <!-- Başlık -->
-        <header class="bg-gradient-to-r from-blue-800 to-blue-600 text-white p-6 rounded-t-lg shadow-md">
+        <!-- Başlık --><header class="bg-gradient-to-r from-blue-800 to-blue-600 text-white p-6 rounded-t-lg shadow-md">
             <h1 class="text-2xl sm:text-3xl font-bold">BSG Grup İçi Değerlendirme</h1>
             <p class="text-sm text-blue-100">Haftalık performans ve katkı değerlendirme formu.</p>
         </header>
 
-        <!-- Ana İçerik Alanı (Form ve Tablolar) -->
-        <div class="bg-white shadow-lg rounded-b-lg flex flex-col lg:flex-row">
+        <!-- Ana İçerik Alanı (Form ve Tablolar) --><div class="bg-white shadow-lg rounded-b-lg flex flex-col lg:flex-row">
 
-            <!-- Sol Taraf: Puanlama Formu -->
-            <div class="w-full lg:w-1/2 p-4 sm:p-6 border-b lg:border-b-0 lg:border-r border-gray-200">
+            <!-- Sol Taraf: Puanlama Formu --><div class="w-full lg:w-1/2 p-4 sm:p-6 border-b lg:border-b-0 lg:border-r border-gray-200">
                 <h2 class="text-xl font-semibold text-gray-800 mb-4">Değerlendirme Formu</h2>
                 
-                <!-- Puanlayan Kişi Seçimi -->
-                <div class="mb-4">
+                <!-- Puanlayan Kişi Seçimi --><div class="mb-4">
                     <label for="rater-select" class="block text-sm font-medium text-gray-700 mb-1">Puanlayan Kişi:</label>
                     <select id="rater-select" class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
                         <option value="">Lütfen adınızı seçin...</option>
-                        <!-- Seçenekler JS ile eklenecek -->
-                    </select>
+                        <!-- Seçenekler JS ile eklenecek --></select>
                 </div>
 
-                <!-- Puanlama Formu Konteyneri (Dinamik) -->
-                <div id="rating-form-container" class="hidden">
+                <!-- Puanlama Formu Konteyneri (Dinamik) --><div id="rating-form-container" class="hidden">
                     <div class="flex justify-between items-center mb-3">
                          <h3 class="text-lg font-medium text-gray-700">Puanlama Tablosu</h3>
                          <span class="text-sm font-semibold text-blue-600 bg-blue-100 px-3 py-1 rounded-full" id="current-week"></span>
@@ -557,17 +545,15 @@
                                 <thead class="bg-gray-50">
                                     <tr>
                                         <th class="py-3 px-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Kişi</th>
-                                        <!-- Kriter Başlıkları JS ile oluşturulabilir veya sabit kalabilir -->
-                                        <th class="py-3 px-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" title="Toplantıya Katılım (1)">Toplantıya Katılım</th>
+                                        <!-- Kriter Başlıkları JS ile oluşturulabilir veya sabit kalabilir --><th class="py-3 px-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" title="Toplantıya Katılım (1)">Toplantıya Katılım</th>
                                         <th class="py-3 px-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" title="Zorunlu Görev (1)">Zorunlu Görev</th>
                                         <th class="py-3 px-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" title="Ekstra Görev (0.75)">Ekstra Görev</th>
-                                        <th class="py-3 px-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" title="Yardım (0.75)">Yardım</th>
+                                        <th class="py-3 px-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" title="Görev Desteği (0.75)">Görev Desteği</th>
                                         <th class="py-3 px-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" title="Bilgi Paylaşımı (0.5)">Bilgi Paylaşımı</th>
                                     </tr>
                                 </thead>
                                 <tbody id="rating-form-table-body" class="bg-white divide-y divide-gray-200">
-                                    <!-- Form satırları JS ile eklenecek -->
-                                </tbody>
+                                    <!-- Form satırları JS ile eklenecek --></tbody>
                             </table>
                         </div>
                         <button type="submit" id="submit-button" class="mt-6 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-lg shadow-md transition duration-300 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed">
@@ -577,12 +563,10 @@
                 </div>
             </div>
 
-            <!-- Sağ Taraf: Sonuçlar ve Tablolar -->
-            <div class="w-full lg:w-1/2 p-4 sm:p-6">
+            <!-- Sağ Taraf: Sonuçlar ve Tablolar --><div class="w-full lg:w-1/2 p-4 sm:p-6">
                 <h2 class="text-xl font-semibold text-gray-800 mb-4">Sonuçlar ve Puan Durumu</h2>
 
-                <!-- Yükleniyor Göstergesi -->
-                <div id="loading-indicator" class="flex items-center justify-center h-64">
+                <!-- Yükleniyor Göstergesi --><div id="loading-indicator" class="flex items-center justify-center h-64">
                     <svg class="animate-spin -ml-1 mr-3 h-8 w-8 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -590,11 +574,9 @@
                     <span class="text-lg text-gray-600">Sonuçlar yükleniyor...</span>
                 </div>
 
-                <!-- Sonuç İçeriği (Yüklenince görünür) -->
-                <div id="results-content" class="hidden">
+                <!-- Sonuç İçeriği (Yüklenince görünür) --><div id="results-content" class="hidden">
                     
-                    <!-- Haftalık Puan Durumu Tablosu -->
-                    <div class="mb-6">
+                    <!-- Haftalık Puan Durumu Tablosu --><div class="mb-6">
                         <h3 class="text-lg font-medium text-gray-700 mb-2">Haftalık Puan Durumu</h3>
                         <div class="border border-gray-200 rounded-lg overflow-hidden shadow-sm">
                             <table class="min-w-full divide-y divide-gray-200">
@@ -606,17 +588,14 @@
                                     </tr>
                                 </thead>
                                 <tbody id="results-table-body" class="bg-white divide-y divide-gray-200">
-                                    <!-- Sonuç satırları JS ile eklenecek -->
-                                </tbody>
+                                    <!-- Sonuç satırları JS ile eklenecek --></tbody>
                             </table>
                         </div>
                     </div>
                     
-                    <!-- Yıldız Tabloları -->
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- Yıldız Tabloları --><div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         
-                        <!-- Haftanın Yıldızı -->
-                        <div class="bg-yellow-50 border border-yellow-300 rounded-lg p-4 shadow-sm">
+                        <!-- Haftanın Yıldızı --><div class="bg-yellow-50 border border-yellow-300 rounded-lg p-4 shadow-sm">
                             <h4 class="text-lg font-semibold text-yellow-800 mb-3 flex items-center">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="currentColor" viewBox="0 0 20 20">
                                     <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
@@ -624,21 +603,18 @@
                                 Haftanın Yıldızı
                             </h4>
                             <ul id="week-stars-list" class="space-y-1">
-                                <!-- JS ile doldurulacak (max 11 satır) -->
-                            </ul>
+                                <!-- JS ile doldurulacak (max 11 satır) --></ul>
                         </div>
                         
-                        <!-- Haftaların Yıldızı -->
-                        <div class="bg-purple-50 border border-purple-300 rounded-lg p-4 shadow-sm">
+                        <!-- Projenin Yıldızı --><div class="bg-purple-50 border border-purple-300 rounded-lg p-4 shadow-sm">
                             <h4 class="text-lg font-semibold text-purple-800 mb-3 flex items-center">
-                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="currentColor" viewBox="0 0 20 20">
-                                    <path fill-rule="evenodd" d="M10 2c.24 0 .48.01.71.04l1.64.2a.75.75 0 00.6.7l.25 1.68c.02.16.03.32.03.48V7c0 1.1-.9 2-2 2h-1.5a.75.75 0 01-.75-.75V3.5A1.5 1.5 0 0110 2zM8.5 3.5v4.75a.75.75 0 01-.75.75H6c-1.1 0-2-.9-2-2v-2.2c0-.16.01-.32.03-.48l.25-1.68a.75.75 0 00.6-.7l1.64-.2A1.5 1.5 0 018.5 3.5zM4 11.25a.75.75 0 01.75-.75h10.5a.75.75 0 01.75.75v.5c0 .63-.52 1.13-1.16 1.13H5.16c-.64 0-1.16-.5-1.16-1.13v-.5zM4.1 14.5a.75.75 0 01.75-.75h10.29a.75.75 0 01.75.75v.25c0 .65-.53 1.18-1.18 1.18H5.28c-.65 0-1.18-.53-1.18-1.18v-.25z" clip-rule="evenodd" />
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6 mr-2">
+                                    <path fill-rule="evenodd" d="M14.615 1.595a.75.75 0 01.359.852L12.982 9.75h7.268a.75.75 0 01.548 1.262l-10.5 11.25a.75.75 0 01-1.272-.71l1.983-7.319H3.75a.75.75 0 01-.548-1.262l10.5-11.25a.75.75 0 01.913-.143z" clip-rule="evenodd" />
                                 </svg>
-                                Haftaların Yıldızı
+                                Projenin Yıldızı
                             </h4>
                             <ul id="all-time-stars-list" class="space-y-1">
-                                <!-- JS ile doldurulacak (max 11 satır) -->
-                            </ul>
+                                <!-- JS ile doldurulacak (max 11 satır) --></ul>
                         </div>
                     </div>
                     
@@ -647,13 +623,10 @@
         </div>
     </div>
 
-    <!-- Toast Bildirim -->
-    <div id="toast-notification" class="fixed top-5 right-5 w-auto max-w-sm p-4 bg-green-500 text-white rounded-lg shadow-lg opacity-0 -translate-y-12 transform transition-all duration-300 ease-in-out z-50">
+    <!-- Toast Bildirim --><div id="toast-notification" class="fixed top-5 right-5 w-auto max-w-sm p-4 bg-green-500 text-white rounded-lg shadow-lg opacity-0 -translate-y-12 transform transition-all duration-300 ease-in-out z-50">
         <p id="toast-message" class="font-medium">Puanlama başarıyla gönderildi!</p>
     </div>
 
 </body>
 </html>
-
-
 
