@@ -53,8 +53,8 @@
         // Puanlama Kriterleri ve Ağırlıkları
         const criteria = [
             { id: "katilim", name: "Toplantıya Katılım", weight: 1 },
-            { id: "zorunlu", name: "Zorunlu Yük", weight: 1 },
-            { id: "ekstra", name: "Ekstra Yük", weight: 0.75 },
+            { id: "zorunlu", name: "Zorunlu Görev", weight: 1 },
+            { id: "ekstra", name: "Ekstra Görev", weight: 0.75 },
             { id: "yardim", name: "Yardım", weight: 0.75 },
             { id: "bilgi", name: "Bilgi Paylaşımı", weight: 0.5 }
         ];
@@ -558,11 +558,11 @@
                                     <tr>
                                         <th class="py-3 px-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Kişi</th>
                                         <!-- Kriter Başlıkları JS ile oluşturulabilir veya sabit kalabilir -->
-                                        <th class="py-3 px-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" title="Toplantıya Katılım (1)">Katılım</th>
-                                        <th class="py-3 px-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" title="Zorunlu Yük (1)">Z. Yük</th>
-                                        <th class="py-3 px-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" title="Ekstra Yük (0.75)">E. Yük</th>
+                                        <th class="py-3 px-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" title="Toplantıya Katılım (1)">Toplantıya Katılım</th>
+                                        <th class="py-3 px-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" title="Zorunlu Görev (1)">Zorunlu Görev</th>
+                                        <th class="py-3 px-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" title="Ekstra Görev (0.75)">Ekstra Görev</th>
                                         <th class="py-3 px-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" title="Yardım (0.75)">Yardım</th>
-                                        <th class="py-3 px-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" title="Bilgi Paylaşımı (0.5)">Bilgi</th>
+                                        <th class="py-3 px-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" title="Bilgi Paylaşımı (0.5)">Bilgi Paylaşımı</th>
                                     </tr>
                                 </thead>
                                 <tbody id="rating-form-table-body" class="bg-white divide-y divide-gray-200">
@@ -654,4 +654,5 @@
 
 </body>
 </html>
+
 
