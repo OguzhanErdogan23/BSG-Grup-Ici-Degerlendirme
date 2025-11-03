@@ -17,14 +17,14 @@
 
         // Firebase ve Uygulama Konfigürasyonu
         // Bu değişkenler Canvas ortamı tarafından otomatik olarak sağlanacaktır.
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : { apiKey: "const firebaseConfig = {
-    apiKey: "AIzaSyAGo1xQfMUvDMzcnWQLrTAA_zGTB_h96Jk",
-    authDomain: "bsg-grup-ici-degerlendirme.firebaseapp.com",
-    projectId: "bsg-grup-ici-degerlendirme",
-    storageBucket: "bsg-grup-ici-degerlendirme.firebasestorage.app",
-    messagingSenderId: "36504836557",
-    appId: "1:36504836557:web:cda47796201a5c0e4d4c84"
-  };", authDomain: "YOUR_AUTH_DOMAIN", projectId: "YOUR_PROJECT_ID" };
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
+            apiKey: "AIzaSyAGo1xQfMUvDMzcnWQLrTAA_zGTB_h96Jk",
+            authDomain: "bsg-grup-ici-degerlendirme.firebaseapp.com",
+            projectId: "bsg-grup-ici-degerlendirme",
+            storageBucket: "bsg-grup-ici-degerlendirme.firebasestorage.app",
+            messagingSenderId: "36504836557",
+            appId: "1:36504836557:web:cda47796201a5c0e4d4c84"
+        };
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         
         let db, auth;
@@ -654,3 +654,4 @@
 
 </body>
 </html>
+
