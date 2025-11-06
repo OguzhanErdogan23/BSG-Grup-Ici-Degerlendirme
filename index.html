@@ -16,7 +16,7 @@
     <script type="module">
         // Firebase Modülleri
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        // 'sessionAuthPersistence' ve 'setPersistence' GİRİŞ HATASI ÇÖZÜMÜ İÇİN EKLENDİ
+        // *** HATA DÜZELTMESİ: 'sessionAuthPersistence' -> 'browserSessionPersistence' olarak değiştirildi ***
         import { 
             getAuth, 
             onAuthStateChanged, 
@@ -24,8 +24,8 @@
             signInWithRedirect, 
             getRedirectResult, 
             signOut,
-            setPersistence,           // EKLENDİ (Oturum Düzeltmesi)
-            sessionAuthPersistence  // EKLENDİ (Oturum Düzeltmesi)
+            setPersistence,
+            browserSessionPersistence // HATA DÜZELTMESİ (sessionAuthPersistence değil)
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, doc, setDoc, onSnapshot, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
@@ -398,7 +398,7 @@
                     // *** GİRİŞ HATASI DÜZELTMESİ (Persistence) ***
                     // Tarayıcının yönlendirme sonrası girişi hatırlaması için
                     // depolamayı 'session' (oturum) olarak ayarla.
-                    await setPersistence(auth, sessionAuthPersistence); 
+                    await setPersistence(auth, browserSessionPersistence); // HATA DÜZELTMESİ
                     // Yönlendirmeyi başlat
                     await signInWithRedirect(auth, provider); 
                 } catch (error) {
