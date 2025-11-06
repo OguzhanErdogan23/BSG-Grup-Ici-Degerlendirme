@@ -27,10 +27,10 @@
         
         let db, auth;
         let currentUserId = null;
-        let allRatingsData = []; // Tüm veritabanı dökümanlarını (docs) saklar
+        let allRatingsData = []; // Tüm veritabanı verilerini saklar
         let allTimeDataCache = {}; // Hesaplanmış verileri saklar
-        let weekMapping = {}; // ISO hafta -> "1. Hafta" eşleştirmesi
-        let availableWeeks = []; // "1. Hafta", "2. Hafta" listesi
+        let weekMapping = {}; // ISO haftalarını (örn: 2025-W45) "1. Hafta" gibi etiketlere çevirir
+        let availableWeeks = []; // Tüm mevcut haftaların sıralı listesi
 
         // Veri Yolu
         const RATING_COLLECTION_PATH = `artifacts/${appId}/public/data/ratings`;
@@ -99,26 +99,29 @@
         }
 
         /**
-         * ISO haftalarını "1. Hafta" gibi etiketlere dönüştürür
+         * Veritabanındaki tüm haftaları bulur ve "1. Hafta" gibi etiketler oluşturur.
          */
         function createWeekMapping(ratingDocs) {
-            const allWeeksISO = new Set();
+            const weeks = new Set();
             ratingDocs.forEach(doc => {
-                allWeeksISO.add(doc.data().week);
+                weeks.add(doc.data().week);
             });
-            // İçinde bulunulan haftayı da ekle (hiç puanlama yoksa bile)
-            allWeeksISO.add(getCurrentWeekISO());
 
-            const sortedWeeksISO = Array.from(allWeeksISO).sort();
-            
+            // Mevcut haftayı da ekle (eğer henüz veri girilmemişse bile)
+            const currentWeek = getCurrentWeekISO();
+            weeks.add(currentWeek);
+
+            // Haftaları kronolojik olarak sırala
+            availableWeeks = Array.from(weeks).sort();
+
+            // Eşleştirme (mapping) oluştur
             weekMapping = {};
-            availableWeeks = [];
-            
-            sortedWeeksISO.forEach((isoWeek, index) => {
-                const label = `${index + 1}. Hafta`;
-                weekMapping[isoWeek] = label;
-                availableWeeks.push(label);
+            availableWeeks.forEach((week, index) => {
+                weekMapping[week] = `${index + 1}. Hafta`;
             });
+            
+            // Mevcut hafta etiketini güncelle
+             document.getElementById("current-week-label").textContent = weekMapping[currentWeek] || "Hafta Etiketi Yok";
         }
 
         // --- ANA VERİ İŞLEME MANTIĞI ---
@@ -148,9 +151,9 @@
                 };
             });
 
-            // 3. Her haftayı ayrı ayrı hesapla
-            for (const week in ratingsByWeek) {
-                const submissions = ratingsByWeek[week];
+            // 3. Her haftayı ayrı ayrı hesapla (Mevcut olan tüm haftalar için)
+            for (const week in weekMapping) {
+                const submissions = ratingsByWeek[week] || []; // O hafta veri olmasa bile hesapla (0 görünmesi için)
                 const scoresReceivedThisWeek = {};
                 userList.forEach(name => {
                     scoresReceivedThisWeek[name] = []; // Her kullanıcının aldığı puanları tutan dizi
@@ -188,12 +191,21 @@
                 });
             }
 
-            // 4. Her kullanıcı için genel ortalamayı hesapla
+            // 4. Her kullanıcı için genel ortalamayı hesapla (sadece veri girilmiş haftaları say)
             userList.forEach(name => {
-                const scores = allTimeData[name].weeklyScores;
-                if (scores.length > 0) {
-                    const total = scores.reduce((sum, s) => sum + s.score, 0);
-                    allTimeData[name].averageScore = total / scores.length;
+                const scores = allTimeData[name].weeklyScores.filter(s => {
+                    // Sadece o hafta için puanlama *alınmışsa* ortalamaya kat
+                    const hasData = ratingsByWeek[s.week]?.some(sub => sub.ratings[name]);
+                    return hasData || s.score !== 0; // Veya skoru 0 değilse (veri girilmiş ama 0 almış olabilir)
+                });
+                
+                // Sadece puanı olan haftaların ortalamasını al
+                const validScores = allTimeData[name].weeklyScores.filter(s => ratingsByWeek[s.week]);
+                if (validScores.length > 0) {
+                    const total = validScores.reduce((sum, s) => sum + s.score, 0);
+                    allTimeData[name].averageScore = total / validScores.length;
+                } else {
+                     allTimeData[name].averageScore = 0;
                 }
             });
 
@@ -205,7 +217,7 @@
 
         /**
          * Puanlayan kişi seçildiğinde puanlama formunu oluşturur.
-         * BU SÜRÜM GÜVENLİDİR: Form her zaman boş (0 seçili) gelir.
+         * (Not: Anonimliği korumak için eski puanları göstermez, formu sıfırlar)
          */
         function renderRatingForm() {
             const raterName = document.getElementById("rater-select").value;
@@ -220,9 +232,6 @@
                 return;
             }
             
-            // Gizlilik için, önceden girilmiş puanlar yüklenmez.
-            // Form her zaman varsayılan (0) olarak gelir.
-
             formContainer.classList.remove("hidden");
             submitButton.disabled = false; // Gönder butonunu aktifleştir
 
@@ -246,13 +255,15 @@
                     
                     const fieldId = `rating-${targetName.replace(/\s+/g, '-')}-${c.id}`;
                     
+                    // Not: Bu sürüm, anonimliği korumak için eski puanları göstermez.
+                    // Her zaman 'checked' varsayılan olarak 'tilde' (0) gelir.
                     tdCrit.innerHTML = `
                         <div class="flex items-center justify-center space-x-1">
                             <!-- +1 Puan --><input type="radio" id="${fieldId}-plus" name="${fieldId}" value="1" class="hidden peer/plus">
                             <label for="${fieldId}-plus" class="w-6 h-6 flex items-center justify-center rounded-full cursor-pointer text-sm font-bold text-green-800 bg-green-200 hover:bg-green-300 peer-checked/plus:bg-green-600 peer-checked/plus:text-white transition-all">+</label>
                             
                             <!-- 0 Puan (Varsayılan) --><input type="radio" id="${fieldId}-zero" name="${fieldId}" value="0" class="hidden peer/zero" checked>
-                            <label for="${fieldId}-zero" class="w-6 h-6 flex items-center justify-center rounded-full cursor-pointer text-sm font-bold text-gray-800 bg-gray-200 hover:bg-gray-300 peer-checked/zero:bg-gray-500 peer-checked/zero:text-white transition-all">0</label>
+                            <label for="${fieldId}-zero" class="w-6 h-6 flex items-center justify-center rounded-full cursor-pointer text-sm font-bold text-gray-800 bg-gray-200 hover:bg-gray-300 peer-checked/zero:bg-gray-500 peer-checked/zero:text-white transition-all">~</label>
                             
                             <!-- -1 Puan --><input type="radio" id="${fieldId}-minus" name="${fieldId}" value="-1" class="hidden peer/minus">
                             <label for="${fieldId}-minus" class="w-6 h-6 flex items-center justify-center rounded-full cursor-pointer text-sm font-bold text-red-800 bg-red-200 hover:bg-red-300 peer-checked/minus:bg-red-600 peer-checked/minus:text-white transition-all">-</label>
@@ -265,23 +276,18 @@
             });
         }
 
-
         /**
-         * "Haftalık Puan Durumu" tablosunu seçilen haftaya göre günceller.
+         * "Haftalık Puan Durumu" tablosunu (seçilen haftaya göre) günceller.
          */
-        function renderResultsTable(allTimeData, selectedWeekLabel) {
+        function renderResultsTable(allTimeData, selectedWeekISO) {
             const tableBody = document.getElementById("results-table-body");
             tableBody.innerHTML = ""; // Tabloyu temizle
-
-            // Etiketten ISO haftasını bul
-            const selectedISOWeek = Object.keys(weekMapping).find(key => weekMapping[key] === selectedWeekLabel);
 
             userList.forEach(name => {
                 const userData = allTimeData[name];
                 if (!userData) return;
 
-                // Seçilen haftanın puanını bul
-                const selectedWeekData = userData.weeklyScores.find(s => s.week === selectedISOWeek);
+                const selectedWeekData = userData.weeklyScores.find(s => s.week === selectedWeekISO);
                 const selectedWeekScore = selectedWeekData ? selectedWeekData.score : 0;
                 const averageScore = userData.averageScore;
 
@@ -300,42 +306,37 @@
         }
 
         /**
-         * "Haftanın Yıldızı" ve "Projenin Yıldızı" tablolarını günceller.
-         * "Haftanın Yıldızı" seçilen haftaya göre değişir.
+         * "Haftanın Yıldızı" ve "Projenin Yıldızı" tablolarını (seçilen haftaya göre) günceller.
          */
-        function renderStarTables(allTimeData, selectedWeekLabel) {
+        function renderStarTables(allTimeData, selectedWeekISO) {
             const weekStarsList = document.getElementById("week-stars-list");
             const allTimeStarsList = document.getElementById("all-time-stars-list");
 
             weekStarsList.innerHTML = "";
             allTimeStarsList.innerHTML = "";
 
-            // Etiketten ISO haftasını bul
-            const selectedISOWeek = Object.keys(weekMapping).find(key => weekMapping[key] === selectedWeekLabel);
-
+            // 1. Seçilen Haftanın Yıldızları
             const weeklyScores = userList.map(name => {
                 const userData = allTimeData[name];
-                const selectedWeekData = userData.weeklyScores.find(s => s.week === selectedISOWeek);
+                const selectedWeekData = userData.weeklyScores.find(s => s.week === selectedWeekISO);
                 return {
                     name: name,
                     score: selectedWeekData ? selectedWeekData.score : 0
                 };
             });
-
-            const averageScores = userList.map(name => {
-                return {
-                    name: name,
-                    score: allTimeData[name].averageScore
-                };
-            });
-
-            // Haftanın Yıldızları (Seçilen haftaya göre)
+            
             const maxWeeklyScore = Math.max(...weeklyScores.map(u => u.score));
             const haftaninYildizlari = weeklyScores
                 .filter(u => u.score === maxWeeklyScore && u.score > 0) // Sadece 0'dan büyük en yüksek puanları al
                 .sort((a, b) => a.name.localeCompare(b.name, 'tr')); // Alfabetik sırala
 
-            // Projenin Yıldızları (Genel Ortalama)
+            // 2. Projenin Yıldızları (Genel Ortalama - bu seçilen haftadan bağımsızdır)
+             const averageScores = userList.map(name => {
+                return {
+                    name: name,
+                    score: allTimeData[name].averageScore
+                };
+            });
             const maxAverageScore = Math.max(...averageScores.map(u => u.score));
             const projeninYildizlari = averageScores
                 .filter(u => u.score === maxAverageScore && u.score > 0) // Sadece 0'dan büyük en yüksek puanları al
@@ -362,41 +363,49 @@
                 }
             };
 
-            populateList(weekStarsList, haftaninYildizlari, "Bu hafta için yıldız yok.");
+            populateList(weekStarsList, haftaninYildizlari, "Bu hafta henüz yıldız yok.");
             populateList(allTimeStarsList, projeninYildizlari, "Genel sıralamada henüz yıldız yok.");
         }
-
+        
         /**
-         * Sonuçlar bölümündeki Hafta Seçim (dropdown) menüsünü doldurur.
+         * Sonuçlar panelindeki "Hafta Seçim" menüsünü (dropdown) oluşturur.
          */
         function renderWeekSelector() {
-            const weekSelector = document.getElementById("week-selector");
-            weekSelector.innerHTML = ""; // Temizle
-
-            // En güncel hafta en üstte olacak şekilde ters sırala
+            const selector = document.getElementById("week-selector");
+            selector.innerHTML = ""; // Temizle
+            
+            const currentWeek = getCurrentWeekISO();
+            
+            // Haftaları (örn: 5. Hafta, 4. Hafta...) şeklinde tersten sırala
             const reversedWeeks = [...availableWeeks].reverse();
-
-            reversedWeeks.forEach(weekLabel => {
+            
+            reversedWeeks.forEach(weekISO => {
                 const option = document.createElement("option");
-                option.value = weekLabel;
-                option.textContent = weekLabel;
-                weekSelector.appendChild(option);
+                option.value = weekISO;
+                option.textContent = weekMapping[weekISO] || weekISO; // örn: "1. Hafta"
+                
+                // Varsayılan olarak mevcut (en son) haftayı seç
+                if(weekISO === currentWeek) {
+                    option.selected = true;
+                }
+                selector.appendChild(option);
             });
-
-            // Seçili değeri en güncel hafta yap
-            weekSelector.value = availableWeeks[availableWeeks.length - 1];
+            
+            // Event listener'ı (yeniden) bağla
+            selector.removeEventListener("change", handleWeekChange); // Eski listener'ı kaldır
+            selector.addEventListener("change", handleWeekChange); // Yeni listener'ı bağla
         }
-
+        
         /**
-         * Hafta seçimi değiştiğinde tabloları günceller.
+         * Hafta seçim menüsü değiştiğinde tabloları günceller.
          */
         function handleWeekChange() {
-            const selectedWeekLabel = document.getElementById("week-selector").value;
-            if (!allTimeDataCache || !selectedWeekLabel) return;
+            const selectedWeekISO = document.getElementById("week-selector").value;
+            if (!selectedWeekISO) return;
             
-            // Tabloları seçilen haftaya göre yeniden render et
-            renderResultsTable(allTimeDataCache, selectedWeekLabel);
-            renderStarTables(allTimeDataCache, selectedWeekLabel);
+            // O hafta için tabloları yeniden çiz
+            renderResultsTable(allTimeDataCache, selectedWeekISO);
+            renderStarTables(allTimeDataCache, selectedWeekISO);
         }
 
         // --- EVENT HANDLERS ---
@@ -434,7 +443,6 @@
                         if (checkedInput) {
                             targetRatings[c.id] = parseInt(checkedInput.value, 10);
                         } else {
-                            // Bu durum olmamalı (varsayılan '0' olduğu için), ama kontrol edelim
                             formIsValid = false;
                         }
                     });
@@ -459,16 +467,28 @@
 
                 showToast("Puanlama başarıyla gönderildi!");
                 
-                // Formu sıfırla (isteğe bağlı, seçimi sıfırlayabilir)
-                // document.getElementById("rater-select").value = "";
-                // renderRatingForm();
-
             } catch (error) {
                 console.error("Puanlama gönderilirken hata:", error);
                 showToast("Bir hata oluştu: " + error.message, true);
             } finally {
                 submitButton.disabled = false;
                 submitButton.textContent = "Puanlamayı Gönder";
+            }
+        }
+        
+        /**
+         * "Nasıl Kullanılır?" penceresini (modal) açar/kapatır.
+         */
+        function toggleHelpModal(show) {
+            const modal = document.getElementById("help-modal");
+            const modalBackdrop = document.getElementById("modal-backdrop");
+            
+            if (show) {
+                modal.classList.remove("hidden");
+                modalBackdrop.classList.remove("hidden");
+            } else {
+                modal.classList.add("hidden");
+                modalBackdrop.classList.add("hidden");
             }
         }
 
@@ -484,7 +504,6 @@
                 db = getFirestore(app);
                 auth = getAuth(app);
                 
-                // Firestore log seviyesini ayarla (debug için)
                 // setLogLevel('debug');
 
                 // Puanlayan kişi (rater) dropdown menüsünü doldur
@@ -499,7 +518,11 @@
                 // Event Listeners
                 raterSelect.addEventListener("change", renderRatingForm);
                 document.getElementById("rating-form").addEventListener("submit", handleSubmit);
-                document.getElementById("week-selector").addEventListener("change", handleWeekChange);
+                
+                // Modal (Yardım Penceresi) Event Listeners
+                document.getElementById("show-help-button").addEventListener("click", () => toggleHelpModal(true));
+                document.getElementById("modal-close-button").addEventListener("click", () => toggleHelpModal(false));
+                document.getElementById("modal-backdrop").addEventListener("click", () => toggleHelpModal(false));
 
                 // Firebase Auth ile giriş yap
                 onAuthStateChanged(auth, (user) => {
@@ -542,25 +565,21 @@
                 console.log("Veri güncellendi, snapshot alındı.");
                 allRatingsData = snapshot.docs; // Tüm dökümanları al
 
-                // 1. Hafta eşleştirmesini oluştur/güncelle
+                // 1. Hafta etiketlerini oluştur (örn: 2025-W45 -> 1. Hafta)
                 createWeekMapping(allRatingsData);
-
-                // 2. Geçerli hafta etiketini güncelle
-                const currentWeekISO = getCurrentWeekISO();
-                document.getElementById("current-week-label").textContent = weekMapping[currentWeekISO] || `${availableWeeks.length}. Hafta`;
                 
-                // 3. Veriyi işle
+                // 2. Tüm veriyi işle (Haftalık puanlar ve Genel Ortalama)
                 const allTimeData = processData(allRatingsData);
                 
-                // 4. Hafta seçim menüsünü doldur
+                // 3. Hafta seçim menüsünü (dropdown) oluştur
                 renderWeekSelector();
-
-                // 5. Seçili haftaya göre arayüzü güncelle (varsayılan olarak en güncel hafta)
-                const selectedWeekLabel = document.getElementById("week-selector").value;
-                renderResultsTable(allTimeData, selectedWeekLabel);
-                renderStarTables(allTimeData, selectedWeekLabel);
                 
-                // 6. Yükleniyor göstergesini gizle
+                // 4. Arayüzü güncelle (Mevcut seçili haftaya göre)
+                const selectedWeekISO = document.getElementById("week-selector").value;
+                renderResultsTable(allTimeData, selectedWeekISO);
+                renderStarTables(allTimeData, selectedWeekISO);
+                
+                // Yükleniyor göstergesini gizle
                 document.getElementById("loading-indicator").classList.add("hidden");
                 document.getElementById("results-content").classList.remove("hidden");
 
@@ -576,40 +595,62 @@
 
     </script>
     
-    <!-- Özel Stil (Radyo butonlar için) --><style>
+    <!-- Özel Stil (Radyo butonlar için) -->
+    <style>
         /* Firefox'ta gizli radyo butonların odaklanma halkasını gizle */
         input[type="radio"].hidden:focus + label {
             outline: 2px solid transparent;
             outline-offset: 2px;
+        }
+        /* Chrome/Safari'de dokunma vurgu rengini kaldır */
+        input[type="radio"].hidden {
+            -webkit-tap-highlight-color: transparent;
         }
     </style>
 </head>
 
 <body class="bg-gray-100 font-sans antialiased">
 
-    <!-- Ana Konteyner --><div class="container mx-auto max-w-7xl my-8 p-4">
+    <!-- Ana Konteyner -->
+    <div class="container mx-auto max-w-7xl my-8 p-4">
     
-        <!-- Başlık --><header class="bg-gradient-to-r from-blue-800 to-blue-600 text-white p-6 rounded-t-lg shadow-md">
-            <h1 class="text-2xl sm:text-3xl font-bold">BSG Grup İçi Değerlendirme</h1>
-            <p class="text-sm text-blue-100">Haftalık performans ve katkı değerlendirme formu.</p>
+        <!-- Başlık -->
+        <header class="bg-gradient-to-r from-blue-800 to-blue-600 text-white p-6 rounded-t-lg shadow-md relative">
+            <div class="flex justify-between items-center">
+                <div>
+                    <h1 class="text-2xl sm:text-3xl font-bold">BSG Grup İçi Değerlendirme</h1>
+                    <p class="text-sm text-blue-100">Haftalık performans ve katkı değerlendirme formu.</p>
+                </div>
+                <button id="show-help-button" class="bg-white/20 hover:bg-white/30 text-white font-semibold py-2 px-4 rounded-lg transition-all flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                      <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
+                    </svg>
+                    Nasıl Kullanılır?
+                </button>
+            </div>
         </header>
 
-        <!-- Ana İçerik Alanı (Form ve Tablolar) --><div class="bg-white shadow-lg rounded-b-lg flex flex-col lg:flex-row">
+        <!-- Ana İçerik Alanı (Form ve Tablolar) -->
+        <div class="bg-white shadow-lg rounded-b-lg flex flex-col lg:flex-row">
 
-            <!-- Sol Taraf: Puanlama Formu --><div class="w-full lg:w-1/2 p-4 sm:p-6 border-b lg:border-b-0 lg:border-r border-gray-200">
+            <!-- Sol Taraf: Puanlama Formu -->
+            <div class="w-full lg:w-1/2 p-4 sm:p-6 border-b lg:border-b-0 lg:border-r border-gray-200">
                 <h2 class="text-xl font-semibold text-gray-800 mb-4">Değerlendirme Formu</h2>
                 
-                <!-- Puanlayan Kişi Seçimi --><div class="mb-4">
+                <!-- Puanlayan Kişi Seçimi -->
+                <div class="mb-4">
                     <label for="rater-select" class="block text-sm font-medium text-gray-700 mb-1">Puanlayan Kişi:</label>
                     <select id="rater-select" class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
                         <option value="">Lütfen adınızı seçin...</option>
-                        <!-- Seçenekler JS ile eklenecek --></select>
+                        <!-- Seçenekler JS ile eklenecek -->
+                    </select>
                 </div>
 
-                <!-- Puanlama Formu Konteyneri (Dinamik) --><div id="rating-form-container" class="hidden">
+                <!-- Puanlama Formu Konteyneri (Dinamik) -->
+                <div id="rating-form-container" class="hidden">
                     <div class="flex justify-between items-center mb-3">
                          <h3 class="text-lg font-medium text-gray-700">Puanlama Tablosu</h3>
-                         <span class="text-sm font-semibold text-blue-600 bg-blue-100 px-3 py-1 rounded-full" id="current-week-label"></span>
+                         <span class="text-sm font-semibold text-blue-600 bg-blue-100 px-3 py-1 rounded-full" id="current-week-label">...</span>
                     </div>
                    
                     <form id="rating-form">
@@ -618,16 +659,17 @@
                                 <thead class="bg-gray-50">
                                     <tr>
                                         <th class="py-3 px-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Kişi</th>
-                                        <!-- Kriter Başlıkları --><th class="py-3 px-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" title="Toplantıya Katılım (1)">Toplantıya Katılım</th>
-                                        <th class="py-3 px-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" title="Zorunlu Görev (1)
-">Zorunlu Görev</th>
+                                        <!-- Kriter Başlıkları -->
+                                        <th class="py-3 px-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" title="Toplantıya Katılım (1)">Toplantıya Katılım</th>
+                                        <th class="py-3 px-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" title="Zorunlu Görev (1)">Zorunlu Görev</th>
                                         <th class="py-3 px-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" title="Ekstra Görev (0.75)">Ekstra Görev</th>
                                         <th class="py-3 px-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" title="Görev Desteği (0.75)">Görev Desteği</th>
                                         <th class="py-3 px-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" title="Bilgi Paylaşımı (0.5)">Bilgi Paylaşımı</th>
                                     </tr>
                                 </thead>
                                 <tbody id="rating-form-table-body" class="bg-white divide-y divide-gray-200">
-                                    <!-- Form satırları JS ile eklenecek --></tbody>
+                                    <!-- Form satırları JS ile eklenecek -->
+                                </tbody>
                             </table>
                         </div>
                         <button type="submit" id="submit-button" class="mt-6 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-lg shadow-md transition duration-300 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed">
@@ -637,21 +679,21 @@
                 </div>
             </div>
 
-            <!-- Sağ Taraf: Sonuçlar ve Tablolar --><div class="w-full lg:w-1/2 p-4 sm:p-6">
-                
+            <!-- Sağ Taraf: Sonuçlar ve Tablolar -->
+            <div class="w-full lg:w-1/2 p-4 sm:p-6">
                 <div class="flex justify-between items-center mb-4">
                     <h2 class="text-xl font-semibold text-gray-800">Sonuçlar ve Puan Durumu</h2>
                     <!-- Hafta Seçim Menüsü -->
                     <div class="flex items-center">
                         <label for="week-selector" class="block text-sm font-medium text-gray-700 mr-2">Hafta:</label>
-                        <select id="week-selector" class="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 text-sm">
+                        <select id="week-selector" class="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
                             <!-- Haftalar JS ile eklenecek -->
                         </select>
                     </div>
                 </div>
 
-
-                <!-- Yükleniyor Göstergesi --><div id="loading-indicator" class="flex items-center justify-center h-64">
+                <!-- Yükleniyor Göstergesi -->
+                <div id="loading-indicator" class="flex items-center justify-center h-64">
                     <svg class="animate-spin -ml-1 mr-3 h-8 w-8 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -659,9 +701,11 @@
                     <span class="text-lg text-gray-600">Sonuçlar yükleniyor...</span>
                 </div>
 
-                <!-- Sonuç İçeriği (Yüklenince görünür) --><div id="results-content" class="hidden">
+                <!-- Sonuç İçeriği (Yüklenince görünür) -->
+                <div id="results-content" class="hidden">
                     
-                    <!-- Haftalık Puan Durumu Tablosu --><div class="mb-6">
+                    <!-- Haftalık Puan Durumu Tablosu -->
+                    <div class="mb-6">
                         <h3 class="text-lg font-medium text-gray-700 mb-2">Haftalık Puan Durumu</h3>
                         <div class="border border-gray-200 rounded-lg overflow-hidden shadow-sm">
                             <table class="min-w-full divide-y divide-gray-200">
@@ -673,14 +717,17 @@
                                     </tr>
                                 </thead>
                                 <tbody id="results-table-body" class="bg-white divide-y divide-gray-200">
-                                    <!-- Sonuç satırları JS ile eklenecek --></tbody>
+                                    <!-- Sonuç satırları JS ile eklenecek -->
+                                </tbody>
                             </table>
                         </div>
                     </div>
                     
-                    <!-- Yıldız Tabloları --><div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- Yıldız Tabloları -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         
-                        <!-- Haftanın Yıldızı --><div class="bg-yellow-50 border border-yellow-300 rounded-lg p-4 shadow-sm">
+                        <!-- Haftanın Yıldızı -->
+                        <div class="bg-yellow-50 border border-yellow-300 rounded-lg p-4 shadow-sm">
                             <h4 class="text-lg font-semibold text-yellow-800 mb-3 flex items-center">
                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="currentColor" viewBox="0 0 20 20">
                                     <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
@@ -688,22 +735,21 @@
                                 Haftanın Yıldızı
                             </h4>
                             <ul id="week-stars-list" class="space-y-1">
-                                <!-- JS ile doldurulacak (max 11 satır) --></ul>
+                                <!-- JS ile doldurulacak (max 11 satır) -->
+                            </ul>
                         </div>
                         
-                        <!-- Projenin Yıldızı --><div class="bg-purple-50 border border-purple-300 rounded-lg p-4 shadow-sm">
+                        <!-- Projenin Yıldızı -->
+                        <div class="bg-purple-50 border border-purple-300 rounded-lg p-4 shadow-sm">
                             <h4 class="text-lg font-semibold text-purple-800 mb-3 flex items-center">
                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6 mr-2">
-                                     <path d="M11.25 4.533A9.709 9.709 0 0 0 6 3a9.75 9.75 0 0 0-4.065 7.72.75.75 0 0 0 .718.786A6.74 6.74 0 0 1 6.75 12a.75.75 0 0 0 .75-.75V3.75a.75.75 0 0 0-.855-.742ZM12.75 3.75V11.25a.75.75 0 0 0 .75.75 6.74 6.74 0 0 1 4.097.712.75.75 0 0 0 .718-.786A9.75 9.75 0 0 0 18 3a9.709 9.709 0 0 0-5.25 1.533A.75.75 0 0 0 12.75 3.75Z"/>
-                                     <path d="M12 12.75h-.008C11.16 12.75 10.5 13.41 10.5 14.25v5.25c0 .84.66 1.5 1.492 1.5H12c.84 0 1.5-.66 1.5-1.5v-5.25c0-.84-.66-1.5-1.5-1.5H12Z"/>
-                                     <path d="M3.75 15a.75.75 0 0 0-1.5 0v4.5a.75.75 0 0 0 1.5 0v-4.5Z"/>
-                                     <path d="M20.25 15a.75.75 0 0 0-1.5 0v4.5a.75.75 0 0 0 1.5 0v-4.5Z"/>
-                                     <path d="M16.06 13.97a.75.75 0 0 1 1.06 1.06l-1.5 1.5a.75.75 0 1 1-1.06-1.06l1.5-1.5ZM6.88 15.03a.75.75 0 0 1 1.06-1.06l1.5 1.5a.75.75 0 1 1-1.06 1.06l-1.5-1.5Z"/>
+                                    <path fill-rule="evenodd" d="M14.615 1.595a.75.75 0 01.359.852L12.982 9.75h7.268a.75.75 0 01.548 1.262l-10.5 11.25a.75.75 0 01-1.272-.71l1.983-7.319H3.75a.75.75 0 01-.548-1.262l10.5-11.25a.75.75 0 01.913-.143z" clip-rule="evenodd" />
                                 </svg>
                                 Projenin Yıldızı
                             </h4>
                             <ul id="all-time-stars-list" class="space-y-1">
-                                <!-- JS ile doldurulacak (max 11 satır) --></ul>
+                                <!-- JS ile doldurulacak (max 11 satır) -->
+                            </ul>
                         </div>
                     </div>
                     
@@ -712,8 +758,58 @@
         </div>
     </div>
 
-    <!-- Toast Bildirim --><div id="toast-notification" class="fixed top-5 right-5 w-auto max-w-sm p-4 bg-green-500 text-white rounded-lg shadow-lg opacity-0 -translate-y-12 transform transition-all duration-300 ease-in-out z-50">
+    <!-- Toast Bildirim -->
+    <div id="toast-notification" class="fixed top-5 right-5 w-auto max-w-sm p-4 bg-green-500 text-white rounded-lg shadow-lg opacity-0 -translate-y-12 transform transition-all duration-300 ease-in-out z-50">
         <p id="toast-message" class="font-medium">Puanlama başarıyla gönderildi!</p>
+    </div>
+    
+    <!-- Nasıl Kullanılır? Modal (Pencere) -->
+    <div id="modal-backdrop" class="fixed inset-0 bg-black/30 backdrop-blur-sm hidden z-40" aria-hidden="true"></div>
+    <div id="help-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white w-full max-w-2xl rounded-lg shadow-2xl p-6 relative">
+            <!-- Kapatma Butonu -->
+            <button id="modal-close-button" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
+            
+            <h3 class="text-2xl font-bold text-gray-800 mb-4">Nasıl Kullanılır?</h3>
+            
+            <!-- Metin İçeriği (Markdown'dan dönüştürüldü) -->
+            <div class="space-y-4 text-gray-700">
+                <div>
+                    <h4 class="font-semibold text-lg">1. Başlama:</h4>
+                    <p>Formu açmak için "Puanlayan Kişi" listesinden <em>kendi adınızı</em> seçiniz.</p>
+                </div>
+                <div>
+                    <h4 class="font-semibold text-lg">2. Puanlama:</h4>
+                    <p>Değerlendirmeyi <code class="bg-gray-100 px-1 py-0.5 rounded">+</code>, <code class="bg-gray-100 px-1 py-0.5 rounded">~</code>, <code class="bg-gray-100 px-1 py-0.5 rounded">-</code> butonları ile yapınız.</p>
+                    <ul class="list-disc list-inside mt-2 ml-4 space-y-1">
+                        <li><code class="font-bold text-green-600">+</code>: Olumlu katkı (Görev tamamlandı).</li>
+                        <li><code class="font-bold text-red-600">-</code>: Olumsuz katkı (Görev aksatıldı).</li>
+                        <li><code class="font-bold text-gray-600">~</code>: Nötr (Görev yarım yapıldı / Bilgim yok).</li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 class="font-semibold text-lg">3. Gönderme:</h4>
+                    <p>"Puanlamayı Gönder" butonuna basınız. Sistem, puanları kriter ağırlıklarına göre hesaplar ve 100'lük sisteme çevirip tabloya işler.</p>
+                </div>
+                 <div>
+                    <h4 class="font-semibold text-lg">4. Güncelleme:</h4>
+                    <p>Hafta içinde puanlarınızı değiştirebilirsiniz; sistem her zaman son gönderdiğiniz puanın üzerine yazar.</p>
+                </div>
+                <div>
+                    <h4 class="font-semibold text-lg">5. Zamanlama:</h4>
+                    <p>Puanlamalar haftalıktır ve <strong>her hafta pazar akşamına kadar</strong> tamamlanmalıdır. Herkesi aynı anda puanlamak zorunda değilsiniz, hafta içinde parçalı puanlama yapabilirsiniz.</p>
+                </div>
+                 <div>
+                    <h4 class="font-semibold text-lg">6. Geçmiş:</h4>
+                    <p>"Sonuçlar" panelindeki <strong>"Hafta"</strong> menüsünden sonucunu görüntülemek istediğiniz haftayı seçerek geçmiş puanları ve yıldızları görüntüleyebilirsiniz.</p>
+                </div>
+            </div>
+            
+        </div>
     </div>
 
 </body>
