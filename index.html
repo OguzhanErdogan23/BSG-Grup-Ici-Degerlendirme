@@ -3,29 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- ÖNBELLEK ENGELLEME (KULLANICILARIN ESKİ SÜRÜMÜ GÖRMEMESİ İÇİN) -->
+    <!-- ÖNBELLEK ENGELLEME -->
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     
-    <!-- FAVICON (Mavi Kalkan üzerinde Beyaz Kilit) -->
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='currentColor'><path fill-rule='evenodd' d='M10 1.944c1.964 0 3.74.786 5.037 2.083l.963-.963a.75.75 0 011.06 1.06l-.962.963A6.96 6.96 0 0117 10c0 3.866-3.134 7-7 7s-7-3.134-7-7c0-1.933.786-3.74 2.083-5.037l-.963-.963a.75.75 0 011.06-1.06l.963.963A6.96 6.96 0 0110 1.944zM8 10.5a.75.75 0 01.75-.75h2.5a.75.75 0 010 1.5h-2.5a.75.75 0 01-.75-.75zm.75 2.25a.75.75 0 000 1.5h2.5a.75.75 0 000-1.5h-2.5z' fill='white' clip-rule='evenodd'/><path d='M3 10c0 3.866 3.134 7 7 7s7-3.134 7-7c0-1.933-.786-3.74-2.083-5.037l-.963.963a5.48 5.48 0 01-1.017 3.324.75.75 0 00.316 1.06l.963.963c.293.293.293.768 0 1.06-.293.293-.768.293-1.06 0l-.963-.963a.75.75 0 00-1.06-.316 5.48 5.48 0 01-3.324 1.017l-.963.963c-.293.293-.768.293-1.06 0-.293-.293-.293-.768 0-1.06l.963-.963a.75.75 0 00.316-1.06 5.48 5.48 0 01-1.017-3.324l-.963-.963c-.293-.293-.293-.768 0-1.06.293-.293.768-.293 1.06 0l.963.963A6.96 6.96 0 013 10z' fill='%232563EB'/><path fill-rule='evenodd' d='M10 3.444c1.964 0 3.74.786 5.037 2.083l.963-.963a.75.75 0 011.06 1.06l-.962.963A6.96 6.96 0 0117 10c0 2.654-1.48 4.95-3.687 6.115l-.963-.963a.75.75 0 00-1.06.316 5.48 5.48 0 01-3.324 1.017v1.515a.75.75 0 01-1.5 0v-1.515a5.48 5.48 0 01-3.324-1.017.75.75 0 00-1.06-.316l-.963.963C4.48 14.95 3 12.654 3 10c0-1.933.786-3.74 2.083-5.037l-.963-.963a.75.75 0 011.06-1.06l.963.963A6.96 6.96 0 0110 3.444zM8.75 8a.75.75 0 00-1.5 0v3.5c0 .414.336.75.75.75h2.5a.75.75 0 000-1.5h-1.75V8z' fill='white' clip-rule='evenodd'/></svg>" type="image/svg+xml">
+    <!-- YENİ FAVICON (Mavi Dijital Kalkan) -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='currentColor'><path fill-rule='evenodd' d='M10 1.944A11.954 11.954 0 002.5 6.452V9.33a.75.75 0 00.316.626l6.834 4.556a.75.75 0 00.898 0l6.834-4.556A.75.75 0 0017.5 9.33V6.452A11.954 11.954 0 0010 1.944zm0 1.556a10.454 10.454 0 00-6.184 2.846L10 10.93l6.184-4.584A10.454 10.454 0 0010 3.5zM4 7.231l6 4.444 6-4.444v2.099l-5.684 3.79a.75.75 0 01-.898 0L4 9.33V7.231z' fill='%232563EB' clip-rule='evenodd'/></svg>" type="image/svg+xml">
     
     <title>BSG Grup İçi Değerlendirme</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script type="module">
         // Firebase Modülleri
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        // *** HATA DÜZELTMESİ: 'sessionAuthPersistence' -> 'browserSessionPersistence' olarak değiştirildi ***
+        // *** POPUP SİSTEMİNE GERİ DÖNÜLDÜ ***
         import { 
             getAuth, 
             onAuthStateChanged, 
             GoogleAuthProvider, 
-            signInWithRedirect, 
-            getRedirectResult, 
-            signOut,
-            setPersistence,
-            browserSessionPersistence // HATA DÜZELTMESİ (sessionAuthPersistence değil)
+            signInWithPopup, // 'signInWithRedirect' yerine 'signInWithPopup'
+            signOut
+            // 'getRedirectResult', 'setPersistence' ve 'browserSessionPersistence' KALDIRILDI
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, doc, setDoc, onSnapshot, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
@@ -48,20 +46,19 @@
         
         let gCurrentRaterName = null; 
         let gCurrentUserEmail = null; 
-        let isAuthReady = false;
 
         // Veri Yolları
         const RATING_COLLECTION_PATH = `artifacts/${appId}/public/data/ratings`;
         const USER_DIRECTORY_PATH = `user_directory`; 
 
-        // Gruptaki Kişiler (Sadece Puanlama ve Tablolar için)
+        // Gruptaki Kişiler
         const userList = [
             "Enes Malik Arı", "İbrahim Kerem Güven", "Oğuzhan Erdoğan", 
             "Özgün Deniz Sevilmiş", "Selanur Ayaz", "Semih Tepe", "Sena Ateş", 
             "Sude Demir", "Sudem Cücemen", "Şerif Bayram", "Uğur Berktaş"
         ].sort((a, b) => a.localeCompare(b, 'tr'));
 
-        // Puanlama Kriterleri ve Ağırlıkları
+        // Puanlama Kriterleri
         const criteria = [
             { id: "katilim", name: "Toplantıya Katılım", weight: 1 },
             { id: "zorunlu", name: "Zorunlu Görev", weight: 1.25 },
@@ -393,17 +390,17 @@
                 await signOut(auth);
                 showToast("Başarıyla çıkış yapıldı.");
             } else {
-                // Kullanıcı giriş yapmamış, GİRİŞ YAP
+                // Kullanıcı giriş yapmamış, GİRİŞ YAP (POPUP)
                 try {
-                    // *** GİRİŞ HATASI DÜZELTMESİ (Persistence) ***
-                    // Tarayıcının yönlendirme sonrası girişi hatırlaması için
-                    // depolamayı 'session' (oturum) olarak ayarla.
-                    await setPersistence(auth, browserSessionPersistence); // HATA DÜZELTMESİ
-                    // Yönlendirmeyi başlat
-                    await signInWithRedirect(auth, provider); 
+                    // signInWithPopup'ı çağır
+                    await signInWithPopup(auth, provider);
+                    // onAuthStateChanged (aşağıda) girişi otomatik olarak algılayacak
                 } catch (error) {
-                    console.error("Google yönlendirmesi sırasında hata:", error);
-                    showToast("Google'a yönlendirilirken bir hata oluştu.", true);
+                    console.error("Google Popup girişi sırasında hata:", error);
+                    // Kullanıcı popup'ı kapatırsa (auth/popup-closed-by-user) sessiz kal
+                    if (error.code !== 'auth/popup-closed-by-user') {
+                         showToast("Google ile giriş yapılırken bir hata oluştu.", true);
+                    }
                 }
             }
         }
@@ -484,7 +481,7 @@
             }
         }
 
-        // --- UYGULAMA BAŞLANGICI (Zamanlama Hatası Düzeltildi) ---
+        // --- UYGULAMA BAŞLANGICI (POPUP SİSTEMİ) ---
 
         async function initApp() {
             try {
@@ -493,6 +490,13 @@
                 auth = getAuth(app);
                 provider = new GoogleAuthProvider();
                 
+                // *** POPUP HATASI (COOP) ÇÖZÜMÜ ***
+                // Google'a, hesap seçme ekranını göstermesi için
+                // özel bir parametre göndererek tarayıcı güvenlik politikasını aş.
+                provider.setCustomParameters({
+                    'prompt': 'select_account'
+                });
+
                 // 1. Tüm Buton Dinleyicilerini Kur
                 document.getElementById("rating-form").addEventListener("submit", handleSubmit);
                 document.getElementById("auth-button").addEventListener("click", handleAuthClick);
@@ -506,10 +510,9 @@
                 });
 
                 // 2. Auth Durumunu YÖNETEN ANA FONKSİYON
-                // Bu fonksiyon, hem yönlendirmeden (redirect) dönüşü
+                // Bu fonksiyon, hem popup'tan dönüşü
                 // hem de normal sayfa ziyaretlerini (zaten giriş yapmış) yakalar.
                 onAuthStateChanged(auth, (user) => {
-                    isAuthReady = true; // Auth durumu kontrol edildi
                     if (user && user.email) {
                         // Kullanıcı giriş yaptı. Yetkisini kontrol et.
                         checkUserAuthorization(user.email);
@@ -518,21 +521,8 @@
                         updateUIAfterAuth(null);
                     }
                 });
-
-                // 3. YÖNLENDİRME (REDIRECT) SONUCUNU KONTROL ET
-                // Sayfa yüklendiğinde, Google'dan bir yönlendirme olup olmadığını
-                // kontrol et. Bu, onAuthStateChanged'i tetikleyecektir.
-                try {
-                    await getRedirectResult(auth);
-                    // Bu fonksiyonun 'result'ını kullanmamıza gerek yok,
-                    // çünkü onAuthStateChanged (yukarıda) tüm işi yapacak.
-                } catch (error) {
-                    console.error("Giriş yönlendirmesi hatası:", error);
-                    showToast("Giriş yapılırken bir hata oluştu: " + error.code, true);
-                    updateUIAfterAuth(null);
-                }
                 
-                // 4. Veritabanını DİNLE (Herkes için)
+                // 3. Veritabanını DİNLE (Herkes için)
                 subscribeToRatings(); 
 
             } catch (error) {
