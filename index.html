@@ -523,8 +523,6 @@
                 // Sayfa yüklendiğinde, Google'dan bir yönlendirme olup olmadığını
                 // kontrol et. Bu, onAuthStateChanged'i tetikleyecektir.
                 try {
-                    // 'isAuthReady' (yukarıda) 'true' olana kadar
-                    // 'getRedirectResult' beklemeyecek.
                     await getRedirectResult(auth);
                     // Bu fonksiyonun 'result'ını kullanmamıza gerek yok,
                     // çünkü onAuthStateChanged (yukarıda) tüm işi yapacak.
