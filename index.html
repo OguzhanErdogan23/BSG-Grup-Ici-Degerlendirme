@@ -104,20 +104,16 @@
                 weeks.add(doc.data().week);
             });
 
-            // Mevcut haftayı da ekle (eğer henüz veri girilmemişse bile)
             const currentWeek = getCurrentWeekISO();
             weeks.add(currentWeek);
 
-            // Haftaları kronolojik olarak sırala
             availableWeeks = Array.from(weeks).sort();
 
-            // Eşleştirme (mapping) oluştur
             weekMapping = {};
             availableWeeks.forEach((week, index) => {
                 weekMapping[week] = `${index + 1}. Hafta`;
             });
             
-            // Mevcut hafta etiketini güncelle
              document.getElementById("current-week-label").textContent = weekMapping[currentWeek] || "Hafta Etiketi Yok";
         }
 
@@ -125,10 +121,8 @@
 
         /**
          * Firestore'dan gelen tüm puanlama verilerini işler.
-         * Her kullanıcının haftalık puanlarını ve genel ortalamasını hesaplar.
          */
         function processData(ratingDocs) {
-            // 1. Puanlamaları haftaya göre grupla
             const ratingsByWeek = {};
             ratingDocs.forEach(doc => {
                 const data = doc.data();
@@ -138,22 +132,20 @@
                 ratingsByWeek[data.week].push(data);
             });
 
-            // 2. Her kullanıcı için genel bir veri yapısı oluştur
             const allTimeData = {};
             userList.forEach(name => {
                 allTimeData[name] = {
                     name: name,
-                    weeklyScores: [], // { week: "2025-W45", score: 87.5 }
+                    weeklyScores: [],
                     averageScore: 0
                 };
             });
 
-            // 3. Her haftayı ayrı ayrı hesapla (Mevcut olan tüm haftalar için)
             for (const week in weekMapping) {
-                const submissions = ratingsByWeek[week] || []; // O hafta veri olmasa bile hesapla (0 görünmesi için)
+                const submissions = ratingsByWeek[week] || [];
                 const scoresReceivedThisWeek = {};
                 userList.forEach(name => {
-                    scoresReceivedThisWeek[name] = []; // Her kullanıcının aldığı puanları tutan dizi
+                    scoresReceivedThisWeek[name] = [];
                 });
 
                 submissions.forEach(submission => {
@@ -164,14 +156,12 @@
                             criteria.forEach(c => {
                                 weightedSum += (scores[c.id] || 0) * c.weight;
                             });
-                            // 100'lük sisteme dönüştür (Toplam Ağırlık 4, 4 * 25 = 100)
                             const score_100 = weightedSum * (100 / totalWeight);
                             scoresReceivedThisWeek[targetName].push(score_100);
                         }
                     }
                 });
 
-                // O hafta için her kullanıcının ortalama puanını hesapla
                 userList.forEach(name => {
                     const received = scoresReceivedThisWeek[name];
                     let finalWeekScore = 0;
@@ -183,9 +173,8 @@
                 });
             }
 
-            // 4. Her kullanıcı için genel ortalamayı hesapla
+            // Genel ortalamayı hesapla
             userList.forEach(name => {
-                // Sadece puanı olan haftaların ortalamasını al
                 const validScores = allTimeData[name].weeklyScores.filter(s => ratingsByWeek[s.week]);
                 if (validScores.length > 0) {
                     const total = validScores.reduce((sum, s) => sum + s.score, 0);
@@ -195,7 +184,7 @@
                 }
             });
 
-            allTimeDataCache = allTimeData; // Sonuçları önbelleğe al
+            allTimeDataCache = allTimeData;
             return allTimeData;
         }
 
@@ -203,7 +192,6 @@
 
         /**
          * Puanlayan kişi seçildiğinde puanlama formunu oluşturur.
-         * (Not: Anonimliği korumak için eski puanları göstermez, formu sıfırlar)
          */
         function renderRatingForm() {
             const raterName = document.getElementById("rater-select").value;
@@ -211,7 +199,7 @@
             const formTableBody = document.getElementById("rating-form-table-body");
             const submitButton = document.getElementById("submit-button");
             
-            formTableBody.innerHTML = ""; // Formu temizle
+            formTableBody.innerHTML = "";
 
             if (!raterName) {
                 formContainer.classList.add("hidden");
@@ -219,9 +207,8 @@
             }
             
             formContainer.classList.remove("hidden");
-            submitButton.disabled = false; // Gönder butonunu aktifleştir
+            submitButton.disabled = false;
 
-            // Puanlayan kişi dışındaki herkes için bir satır oluştur
             userList.forEach(targetName => {
                 if (targetName === raterName) return; // Kendini puanlayamaz
 
@@ -313,7 +300,7 @@
                 .filter(u => u.score === maxWeeklyScore && u.score > 0)
                 .sort((a, b) => a.name.localeCompare(b.name, 'tr'));
 
-            // 2. Projenin Yıldızları (Genel Ortalama - bu seçilen haftadan bağımsızdır)
+            // 2. Projenin Yıldızları (Genel Ortalama)
              const averageScores = userList.map(name => {
                 return {
                     name: name,
@@ -325,7 +312,7 @@
                 .filter(u => u.score === maxAverageScore && u.score > 0)
                 .sort((a, b) => a.name.localeCompare(b.name, 'tr'));
             
-            // Listeleri doldur (en fazla 11 satır)
+            // Listeleri doldur
             const populateList = (listEl, stars, placeholder) => {
                 if (stars.length === 0) {
                     listEl.innerHTML = `<li class="text-sm text-gray-500 italic px-3 py-2">${placeholder}</li>`;
@@ -370,7 +357,7 @@
                 selector.appendChild(option);
             });
             
-            selector.removeEventListener("change", handleWeekChange); // Eski listener'ı kaldır
+            selector.removeEventListener("change", handleWeekChange);
             selector.addEventListener("change", handleWeekChange);
         }
         
@@ -426,7 +413,6 @@
                     }
                 });
 
-                // Firestore dökümanını oluştur
                 const docId = `rating_${currentWeek}_by_${raterName.replace(/\s+/g, '_')}`;
                 const payload = {
                     rater: raterName,
@@ -435,7 +421,6 @@
                     submittedAt: new Date().toISOString()
                 };
 
-                // Veriyi Firestore'a yaz (setDoc ile üzerine yaz)
                 const docRef = doc(db, RATING_COLLECTION_PATH, docId);
                 await setDoc(docRef, payload);
 
@@ -477,7 +462,6 @@
                 db = getFirestore(app);
                 auth = getAuth(app);
                 
-                // Puanlayan kişi (rater) dropdown menüsünü doldur
                 const raterSelect = document.getElementById("rater-select");
                 userList.forEach(name => {
                     const option = document.createElement("option");
@@ -493,11 +477,14 @@
                 // Modal (Yardım Penceresi) Event Listeners
                 document.getElementById("show-help-button").addEventListener("click", () => toggleHelpModal(true));
                 document.getElementById("modal-close-button").addEventListener("click", () => toggleHelpModal(false));
+                
+                // Dışarıya tıklayarak modal'ı kapatma
+                // Not: ID'yi "modal-backdrop" olarak değiştirdik, "help-modal" yerine.
                 document.getElementById("modal-backdrop").addEventListener("click", () => toggleHelpModal(false));
                 
                 // ESC tuşu ile modal'ı kapatma
                 document.addEventListener('keydown', (e) => {
-                    if (e.key === 'Escape') {
+                    if (e.key === 'Escape' && !document.getElementById("help-modal").classList.contains("hidden")) {
                         toggleHelpModal(false);
                     }
                 });
@@ -508,14 +495,13 @@
                         currentUserId = user.uid;
                         subscribeToRatings(); // Ana veri dinleyicisini başlat
                     } else {
-                        // Token kontrolü
                         if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                             signInWithCustomToken(auth, __initial_auth_token).catch(err => {
                                 console.error("Custom token ile giriş hatası:", err);
-                                signInAnonymously(auth); // Token başarısız olursa anonime dön
+                                signInAnonymously(auth);
                             });
                         } else {
-                            signInAnonymously(auth); // Token yoksa anonim giriş yap
+                            signInAnonymously(auth);
                         }
                     }
                 });
@@ -538,18 +524,16 @@
             onSnapshot(q, (snapshot) => {
                 allRatingsData = snapshot.docs;
 
-                // 1. Hafta etiketlerini oluştur (örn: 2025-W45 -> 1. Hafta)
+                // 1. Hafta etiketlerini oluştur
                 createWeekMapping(allRatingsData);
                 
-                // 2. Tüm veriyi işle (Haftalık puanlar ve Genel Ortalama)
+                // 2. Tüm veriyi işle
                 const allTimeData = processData(allRatingsData);
                 
                 // 3. Hafta seçim menüsünü (dropdown) oluştur
                 renderWeekSelector();
                 
                 // 4. Arayüzü güncelle (Mevcut seçili haftaya göre)
-                // handleWeekChange() çağrısına gerek yok çünkü renderWeekSelector() varsayılan olarak doğru haftayı seçiyor
-                // ve subscribeToRatings'in sonu tabloları zaten dolduruyor.
                 const selectedWeekISO = document.getElementById("week-selector").value;
                 renderResultsTable(allTimeData, selectedWeekISO);
                 renderStarTables(allTimeData, selectedWeekISO);
@@ -581,7 +565,7 @@
             box-shadow: none;
         }
         /* Chrome/Safari'de dokunma vurgu rengini kaldır */
-        label {
+        label, button {
             -webkit-tap-highlight-color: transparent;
         }
     </style>
@@ -657,7 +641,7 @@
                     <h2 class="text-xl font-semibold text-gray-800">Sonuçlar ve Puan Durumu</h2>
                     <div class="flex items-center">
                         <label for="week-selector" class="block text-sm font-medium text-gray-700 mr-2">Hafta:</label>
-                        <select id="week-selector" class_behavior="remove" class="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                        <select id="week-selector" class="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
                             <!-- Haftalar JS ile eklenecek -->
                         </select>
                     </div>
@@ -701,7 +685,7 @@
                                 Haftanın Yıldızı
                             </h4>
                             <ul id="week-stars-list" class="space-y-1">
-                                <!-- JS ile doldurulacak (max 11 satır) -->
+                                <!-- JS ile doldurulacak -->
                             </ul>
                         </div>
                         
@@ -713,7 +697,7 @@
                                 Projenin Yıldızı
                             </h4>
                             <ul id="all-time-stars-list" class="space-y-1">
-                                <!-- JS ile doldurulacak (max 11 satır) -->
+                                <!-- JS ile doldurulacak -->
                             </ul>
                         </div>
                     </div>
@@ -729,12 +713,13 @@
     </div>
     
     <!-- Nasıl Kullanılır? Modal (Pencere) -->
+    
     <!-- Backdrop (Dışarı tıklama alanı) -->
     <div id="modal-backdrop" class="fixed inset-0 bg-black/30 backdrop-blur-sm hidden z-40" aria-hidden="true"></div>
     
-    <!-- Modal Ana Konteyneri (Mobil için kaydırma eklendi) -->
+    <!-- Modal Ana Konteyneri (Mobil için kaydırma ve kapanma düzeltmeleri) -->
     <div id="help-modal" class="fixed inset-0 z-50 flex justify-center p-4 hidden overflow-y-auto">
-        <!-- Modal İçeriği (Mobil için dikey margin eklendi) -->
+        <!-- Modal İçeriği -->
         <div class="bg-white w-full max-w-2xl rounded-lg shadow-2xl p-6 relative my-8 h-fit">
             
             <button id="modal-close-button" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
@@ -749,7 +734,7 @@
             <div class="space-y-4 text-gray-700">
                 <div>
                     <h4 class="font-semibold text-lg">1. Başlama:</h4>
-                    <p>Formu açmak için "Puanlayan Kişi" listesinden <em>kendi adınızı</em> seçiniz.</p>
+                    <p>Formu açmak için "Puanlayan Kişi" listesinden kendi adınızı seçiniz.</p>
                 </div>
                 <div>
                     <h4 class="font-semibold text-lg">2. Puanlama:</h4>
