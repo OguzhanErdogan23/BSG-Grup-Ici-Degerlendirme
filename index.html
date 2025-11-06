@@ -253,7 +253,6 @@
                 tdName.textContent = targetName;
                 tr.appendChild(tdName);
                 
-                // O kişi için daha önce verilmiş puanları al (varsa)
                 const targetPreviousScores = previousRatings[targetName] || {};
 
                 criteria.forEach(c => {
@@ -261,7 +260,6 @@
                     tdCrit.className = "py-3 px-2";
                     const fieldId = `rating-${targetName.replace(/\s+/g, '-')}-${c.id}`;
                     
-                    // O kriter için eski puanı bul (varsayılan 0)
                     const prevScore = targetPreviousScores[c.id] !== undefined ? targetPreviousScores[c.id] : 0;
                     
                     const isPlus = prevScore === 1 ? "checked" : "";
@@ -388,24 +386,26 @@
         function updateUIAfterAuth(userName) {
             const authButton = document.getElementById("auth-button");
             const authStatus = document.getElementById("auth-status");
-            const raterSelectionDiv = document.getElementById("rater-selection-div");
+            const raterSelectionDiv = document.getElementById("rater-selection-div"); // Bu, giriş butonunu içeren ana div
             
             if(userName) {
                 // Giriş yapıldı
                 gCurrentRaterName = userName;
-                authButton.textContent = "Çıkış Yap";
+                authButton.textContent = "Çıkış Yap"; // Butonun metnini değiştir
                 authStatus.innerHTML = `Hoş geldiniz, <span class="font-bold">${userName}</span>`;
                 authStatus.classList.remove("hidden");
-                raterSelectionDiv.classList.add("hidden"); // "Puanlayan Kişi" listesini GİZLE
-                renderRatingForm(); // Puanlama formunu göster
+                
+                // Puanlama formunu göster
+                renderRatingForm(); 
             } else {
                 // Çıkış yapıldı
                 gCurrentRaterName = null;
                 gCurrentUserEmail = null;
-                authButton.textContent = "Google ile Giriş Yap";
+                authButton.textContent = "Google ile Giriş Yap"; // Buton metnini geri al
                 authStatus.classList.add("hidden");
-                raterSelectionDiv.classList.remove("hidden"); // "Puanlayan Kişi" listesini GÖSTER
-                document.getElementById("rating-form-container").classList.add("hidden"); // Puanlama formunu gizle
+                
+                // Puanlama formunu gizle
+                document.getElementById("rating-form-container").classList.add("hidden"); 
             }
         }
 
@@ -418,32 +418,21 @@
             if (gCurrentRaterName) {
                 // Kullanıcı zaten giriş yapmış, ÇIKIŞ YAP
                 await signOut(auth);
-                updateUIAfterAuth(null);
+                // onAuthStateChanged bunu otomatik olarak algılayacak ve updateUIAfterAuth(null) çağrılacak.
                 showToast("Başarıyla çıkış yapıldı.");
             } else {
                 // Kullanıcı giriş yapmamış, GİRİŞ YAP
                 try {
                     const result = await signInWithPopup(auth, provider);
                     const user = result.user;
-                    const email = user.email;
-                    
-                    // E-postayı isimle eşleştir
-                    const matchedName = userListMap[email.toLowerCase()];
-                    
-                    if (matchedName) {
-                        // Başarılı eşleşme
-                        gCurrentUserEmail = email;
-                        updateUIAfterAuth(matchedName);
-                        showToast(`Hoş geldiniz, ${matchedName}!`);
-                    } else {
-                        // Eşleşme bulunamadı
-                        await signOut(auth);
-                        showToast(`Bu e-posta (${email}) puanlama için yetkili değil.`, true);
-                        updateUIAfterAuth(null);
-                    }
+                    // onAuthStateChanged bunu algılayacak ve e-posta kontrolünü yapacak.
                 } catch (error) {
                     console.error("Google girişi sırasında hata:", error);
-                    showToast("Google ile giriş yapılırken bir hata oluştu.", true);
+                    // Kullanıcı popup'ı kapatırsa (error.code === 'auth/popup-closed-by-user')
+                    // burada sessiz kalabiliriz.
+                    if (error.code !== 'auth/popup-closed-by-user') {
+                         showToast("Google ile giriş yapılırken bir hata oluştu.", true);
+                    }
                 }
             }
         }
@@ -454,7 +443,6 @@
         async function handleSubmit(e) {
             e.preventDefault();
             
-            // Sadece giriş yapmış kullanıcılar gönderebilir
             if (!gCurrentRaterName) {
                 showToast("Puanlama gönderebilmek için giriş yapmalısınız.", true);
                 return;
@@ -490,7 +478,7 @@
 
                 const docId = `rating_${currentWeek}_by_${gCurrentRaterName.replace(/\s+/g, '_')}`;
                 const payload = {
-                    rater: gCurrentRaterName, // Puanlayan kişiyi güvenli isimden al
+                    rater: gCurrentRaterName,
                     week: currentWeek,
                     ratings: ratings,
                     submittedAt: new Date().toISOString()
@@ -529,9 +517,7 @@
                 const app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
                 auth = getAuth(app);
-                provider = new GoogleAuthProvider(); // Google giriş sağlayıcısını tanımla
-                
-                // NOT: "Puanlayan Kişi" listesi artık auth (giriş) sonrası dinamik olarak yönetiliyor.
+                provider = new GoogleAuthProvider();
                 
                 // Event Listeners
                 document.getElementById("rating-form").addEventListener("submit", handleSubmit);
@@ -551,29 +537,24 @@
                     }
                 });
 
-                // Firebase Auth durumunu dinle
+                // Firebase Auth durumunu dinle (Ana Arayüz Yöneticisi)
                 onAuthStateChanged(auth, (user) => {
                     if (user && user.email) {
-                        // Kullanıcı giriş yapmış
                         const matchedName = userListMap[user.email.toLowerCase()];
                         if (matchedName) {
-                            // Eşleşme bulundu, arayüzü güncelle
                             gCurrentUserEmail = user.email;
                             updateUIAfterAuth(matchedName);
                         } else {
-                            // E-posta listesinde yok, çıkış yaptır
                             showToast(`Bu e-posta (${user.email}) yetkili değil.`, true);
                             signOut(auth);
                             updateUIAfterAuth(null);
                         }
                     } else {
-                        // Kullanıcı giriş yapmamış
                         updateUIAfterAuth(null);
                     }
                 });
                 
-                // Veri dinleyicisini HER ZAMAN (giriş yapmadan da) başlat
-                // (Puan tabloları herkes tarafından görülebilir)
+                // Puan tablolarını herkesin görmesi için veri dinleyicisini hemen başlat
                 subscribeToRatings(); 
 
             } catch (error) {
@@ -584,7 +565,6 @@
 
         /**
          * Veritabanındaki değişiklikleri dinler ve arayüzü günceller.
-         * Bu fonksiyon artık giriş yapılıp yapılmadığından bağımsız çalışır.
          */
         function subscribeToRatings() {
             const q = collection(db, RATING_COLLECTION_PATH);
@@ -634,7 +614,6 @@
 
 <body class="bg-gray-100 font-sans antialiased">
 
-    <!-- Ana Konteyner -->
     <div class="container mx-auto max-w-7xl my-8 p-4">
     
         <header class="bg-gradient-to-r from-blue-800 to-blue-600 text-white p-6 rounded-t-lg shadow-md relative">
@@ -651,21 +630,17 @@
 
         <div class="bg-white shadow-lg rounded-b-lg flex flex-col lg:flex-row">
 
-            <!-- Sol Taraf: Puanlama Formu -->
             <div class="w-full lg:w-1/2 p-4 sm:p-6 border-b lg:border-b-0 lg:border-r border-gray-200">
                 <h2 class="text-xl font-semibold text-gray-800 mb-4">Değerlendirme Formu</h2>
                 
-                <!-- GİRİŞ/ÇIKIŞ BÖLÜMÜ -->
                 <div id="rater-selection-div" class="mb-4 space-y-3">
                     <p class="text-gray-700">Puanlama yapmak, puanlarınızı güncellemek veya parçalı puanlamaya devam etmek için lütfen giriş yapınız.</p>
                     <button id="auth-button" class="w-full flex items-center justify-center gap-3 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-lg shadow-md transition duration-300">
-                        <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.1H42V20H24v8h11.3c-1.6 5.2-6.4 9-12.3 9c-7.2 0-13-5.8-13-13s5.8-13 13-13c3.1 0 5.9 1.1 8.1 2.9l6.4-6.4C34.6 4.1 29.6 2 24 2C11.8 2 2 11.8 2 24s9.8 22 22 22s22-9.8 22-22c0-1.3-.2-2.7-.5-4z"/><path fill="#FF3D00" d="m6.3 14.8l8.5 6.5c2.1-5.8 7.8-10.1 14.6-10.1c3.1 0 5.9 1.1 8.1 2.9l6.4-6.4C34.6 4.1 29.6 2 24 2C16.3 2 9.7 6.1 6.3 11.7z"/><path fill="#4CAF50" d="m24 46c5.6 0 10.6-1.9 14.6-5.1l-6.4-6.4c-2.2 1.8-5 2.9-8.1 2.9c-6.8 0-12.5-4.3-14.6-10.1l-8.5 6.5C9.7 41.9 16.3 46 24 46z"/><path fill="#1976D2" d="M43.6 20.1H42V20H24v8h11.3c-1.6 5.2-6.4 9-12.3 9c-7.2 0-13-5.8-13-13s5.8-13 13-13c3.1 0 5.9 1.1 8.1 2.9l6.4-6.4C34.6 4.1 29.6 2 24 2C11.8 2 2 11.8 2 24s9.8 22 22 22s22-9.8 22-22c0-1.3-.2-2.7-.5-4z"/></svg>
                         Google ile Giriş Yap
                     </button>
                     <p id="auth-status" class="text-center text-green-700 bg-green-100 p-2 rounded-md hidden"></p>
                 </div>
 
-                <!-- Puanlama Formu Konteyneri (Giriş yapınca görünür) -->
                 <div id="rating-form-container" class="hidden">
                     <div class="flex justify-between items-center mb-3">
                          <h3 class="text-lg font-medium text-gray-700">Puanlama Tablosu</h3>
@@ -686,8 +661,7 @@
                                     </tr>
                                 </thead>
                                 <tbody id="rating-form-table-body" class="bg-white divide-y divide-gray-200">
-                                    <!-- Form satırları JS ile eklenecek -->
-                                </tbody>
+                                    </tbody>
                             </table>
                         </div>
                         <button type="submit" id="submit-button" class="mt-6 w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-4 rounded-lg shadow-md transition duration-300 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed">
@@ -697,15 +671,13 @@
                 </div>
             </div>
 
-            <!-- Sağ Taraf: Sonuçlar ve Tablolar (Her zaman görünür) -->
             <div class="w-full lg:w-1/2 p-4 sm:p-6">
                 <div class="flex justify-between items-center mb-4">
                     <h2 class="text-xl font-semibold text-gray-800">Sonuçlar ve Puan Durumu</h2>
                     <div class="flex items-center">
                         <label for="week-selector" class="block text-sm font-medium text-gray-700 mr-2">Hafta:</label>
                         <select id="week-selector" class="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
-                            <!-- Haftalar JS ile eklenecek -->
-                        </select>
+                            </select>
                     </div>
                 </div>
 
@@ -731,8 +703,7 @@
                                     </tr>
                                 </thead>
                                 <tbody id="results-table-body" class="bg-white divide-y divide-gray-200">
-                                    <!-- Sonuç satırları JS ile eklenecek -->
-                                </tbody>
+                                    </tbody>
                             </table>
                         </div>
                     </div>
@@ -747,8 +718,7 @@
                                 Haftanın Yıldızı
                             </h4>
                             <ul id="week-stars-list" class="space-y-1">
-                                <!-- JS ile doldurulacak -->
-                            </ul>
+                                </ul>
                         </div>
                         
                         <div class="bg-purple-50 border border-purple-300 rounded-lg p-4 shadow-sm">
@@ -759,8 +729,7 @@
                                 Projenin Yıldızı
                             </h4>
                             <ul id="all-time-stars-list" class="space-y-1">
-                                <!-- JS ile doldurulacak -->
-                            </ul>
+                                </ul>
                         </div>
                     </div>
                     
@@ -769,12 +738,10 @@
         </div>
     </div>
 
-    <!-- Toast Bildirim -->
     <div id="toast-notification" class="fixed top-5 right-5 w-auto max-w-sm p-4 bg-green-500 text-white rounded-lg shadow-lg opacity-0 -translate-y-12 transform transition-all duration-300 ease-in-out z-50">
         <p id="toast-message" class="font-medium">Puanlama başarıyla gönderildi!</p>
     </div>
     
-    <!-- Nasıl Kullanılır? Modal (Pencere) -->
     <div id="modal-backdrop" class="fixed inset-0 bg-black/30 backdrop-blur-sm hidden z-40" aria-hidden="true"></div>
     <div id="help-modal" class="fixed inset-0 z-50 flex justify-center p-4 hidden overflow-y-auto">
         <div class="bg-white w-full max-w-2xl rounded-lg shadow-2xl p-6 relative my-8 h-fit">
@@ -787,7 +754,6 @@
             
             <h3 class="text-2xl font-bold text-gray-800 mb-4">Nasıl Kullanılır?</h3>
             
-            <!-- Güncellenmiş Metin İçeriği (Google Giriş Sistemine Göre) -->
             <div class="space-y-4 text-gray-700">
                 <div>
                     <h4 class="font-semibold text-lg">1. Başlama:</h4>
