@@ -7,22 +7,29 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
+    
+    <!-- FAVICON (Mavi Kalkan üzerinde Beyaz Kilit) -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='currentColor'><path fill-rule='evenodd' d='M10 1.944c1.964 0 3.74.786 5.037 2.083l.963-.963a.75.75 0 011.06 1.06l-.962.963A6.96 6.96 0 0117 10c0 3.866-3.134 7-7 7s-7-3.134-7-7c0-1.933.786-3.74 2.083-5.037l-.963-.963a.75.75 0 011.06-1.06l.963.963A6.96 6.96 0 0110 1.944zM8 10.5a.75.75 0 01.75-.75h2.5a.75.75 0 010 1.5h-2.5a.75.75 0 01-.75-.75zm.75 2.25a.75.75 0 000 1.5h2.5a.75.75 0 000-1.5h-2.5z' fill='white' clip-rule='evenodd'/><path d='M3 10c0 3.866 3.134 7 7 7s7-3.134 7-7c0-1.933-.786-3.74-2.083-5.037l-.963.963a5.48 5.48 0 01-1.017 3.324.75.75 0 00.316 1.06l.963.963c.293.293.293.768 0 1.06-.293.293-.768.293-1.06 0l-.963-.963a.75.75 0 00-1.06-.316 5.48 5.48 0 01-3.324 1.017l-.963.963c-.293.293-.768.293-1.06 0-.293-.293-.293-.768 0-1.06l.963-.963a.75.75 0 00.316-1.06 5.48 5.48 0 01-1.017-3.324l-.963-.963c-.293-.293-.293-.768 0-1.06.293-.293.768-.293 1.06 0l.963.963A6.96 6.96 0 013 10z' fill='%232563EB'/><path fill-rule='evenodd' d='M10 3.444c1.964 0 3.74.786 5.037 2.083l.963-.963a.75.75 0 011.06 1.06l-.962.963A6.96 6.96 0 0117 10c0 2.654-1.48 4.95-3.687 6.115l-.963-.963a.75.75 0 00-1.06.316 5.48 5.48 0 01-3.324 1.017v1.515a.75.75 0 01-1.5 0v-1.515a5.48 5.48 0 01-3.324-1.017.75.75 0 00-1.06-.316l-.963.963C4.48 14.95 3 12.654 3 10c0-1.933.786-3.74 2.083-5.037l-.963-.963a.75.75 0 011.06-1.06l.963.963A6.96 6.96 0 0110 3.444zM8.75 8a.75.75 0 00-1.5 0v3.5c0 .414.336.75.75.75h2.5a.75.75 0 000-1.5h-1.75V8z' fill='white' clip-rule='evenodd'/></svg>" type="image/svg+xml">
+    
     <title>BSG Grup İçi Değerlendirme</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script type="module">
-        // Firebase Modülleri
+        // Firebase Modules
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        // 'signInWithRedirect' and 'getRedirectResult' imported
         import { 
             getAuth, 
             onAuthStateChanged, 
             GoogleAuthProvider, 
-            signInWithPopup, 
+            signInWithRedirect, 
+            getRedirectResult, 
             signOut 
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, doc, setDoc, onSnapshot, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // --- GLOBAL DEĞİŞKENLER ---
+        // --- GLOBAL VARIABLES ---
         const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
+            // YOUR ACTUAL FIREBASE CONFIG
             apiKey: "AIzaSyAGo1xQfMUvDMzcnWQLrTAA_zGTB_h96Jk",
             authDomain: "bsg-grup-ici-degerlendirme.firebaseapp.com",
             projectId: "bsg-grup-ici-degerlendirme",
@@ -41,18 +48,18 @@
         let gCurrentRaterName = null; 
         let gCurrentUserEmail = null; 
 
-        // Veri Yolları
+        // Data Paths
         const RATING_COLLECTION_PATH = `artifacts/${appId}/public/data/ratings`;
-        const USER_DIRECTORY_PATH = `user_directory`; 
+        const USER_DIRECTORY_PATH = `user_directory`; // Path to the secure, hidden email list
 
-        // Gruptaki Kişiler (Sadece Puanlama ve Tablolar için)
+        // Group Members (for rendering tables and forms)
         const userList = [
             "Enes Malik Arı", "İbrahim Kerem Güven", "Oğuzhan Erdoğan", 
             "Özgün Deniz Sevilmiş", "Selanur Ayaz", "Semih Tepe", "Sena Ateş", 
             "Sude Demir", "Sudem Cücemen", "Şerif Bayram", "Uğur Berktaş"
         ].sort((a, b) => a.localeCompare(b, 'tr'));
 
-        // Puanlama Kriterleri ve Ağırlıkları
+        // Scoring Criteria and Weights (UPDATED)
         const criteria = [
             { id: "katilim", name: "Toplantıya Katılım", weight: 1 },
             { id: "zorunlu", name: "Zorunlu Görev", weight: 1.25 },
@@ -62,7 +69,7 @@
         ];
         const totalWeight = criteria.reduce((sum, c) => sum + c.weight, 0);
 
-        // --- UTILITY FONKSİYONLARI ---
+        // --- UTILITY FUNCTIONS ---
 
         function getCurrentWeekISO() {
             const date = new Date();
@@ -105,7 +112,7 @@
             document.getElementById("current-week-label").textContent = weekMapping[currentWeek] || "Hafta Etiketi Yok";
         }
 
-        // --- ANA VERİ İŞLEME MANTIĞI ---
+        // --- CORE DATA PROCESSING LOGIC ---
 
         function processData(ratingDocs) {
             const ratingsByWeek = {};
@@ -172,14 +179,9 @@
             return allTimeData;
         }
 
-        // --- ARAYÜZ GÜNCELLEME (RENDER) FONKSİYONLARI ---
+        // --- UI RENDERING FUNCTIONS ---
 
-        /**
-         * Parçalı puanlamayı ve düzenlemeyi desteklemek için
-         * formu kullanıcının o hafta verdiği eski puanlarla doldurur.
-         */
         async function renderRatingForm() {
-            // Bu fonksiyon artık SADECE kullanıcı giriş yaptığında çağrılır
             if (!gCurrentRaterName) { 
                 document.getElementById("rating-form-container").classList.add("hidden");
                 return;
@@ -193,7 +195,7 @@
             formContainer.classList.remove("hidden");
             submitButton.disabled = false;
             
-            // O hafta için kullanıcının eski oylarını bul
+            // Fetch previous votes for partial scoring/editing
             const currentWeek = getCurrentWeekISO();
             const docId = `rating_${currentWeek}_by_${gCurrentRaterName.replace(/\s+/g, '_')}`;
             const docRef = doc(db, RATING_COLLECTION_PATH, docId);
@@ -202,7 +204,6 @@
             const previousRatings = docSnap.exists() ? docSnap.data().ratings : {};
 
             userList.forEach(targetName => {
-                // Kendini puanlayamaz
                 if (targetName === gCurrentRaterName) return; 
 
                 const tr = document.createElement("tr");
@@ -213,7 +214,6 @@
                 tdName.textContent = targetName;
                 tr.appendChild(tdName);
                 
-                // O kişi için daha önce kaydedilmiş puanları bul
                 const targetPreviousScores = previousRatings[targetName] || {};
 
                 criteria.forEach(c => {
@@ -221,10 +221,8 @@
                     tdCrit.className = "py-3 px-2";
                     const fieldId = `rating-${targetName.replace(/\s+/g, '-')}-${c.id}`;
                     
-                    // Önceki puanı al (varsayılan: 0)
                     const prevScore = targetPreviousScores[c.id] !== undefined ? targetPreviousScores[c.id] : 0;
                     
-                    // Hangi butonun seçili geleceğini belirle
                     const isPlus = prevScore === 1 ? "checked" : "";
                     const isZero = prevScore === 0 ? "checked" : "";
                     const isMinus = prevScore === -1 ? "checked" : "";
@@ -248,7 +246,7 @@
             });
         }
 
-        // Puan tablosunu (herkes görebilir)
+        // Render Results Table (Publicly viewable)
         function renderResultsTable(allTimeData, selectedWeekISO) {
             const tableBody = document.getElementById("results-table-body");
             tableBody.innerHTML = "";
@@ -271,14 +269,13 @@
             });
         }
 
-        // Yıldız tablosunu (herkes görebilir)
+        // Render Star Tables (Publicly viewable)
         function renderStarTables(allTimeData, selectedWeekISO) {
             const weekStarsList = document.getElementById("week-stars-list");
             const allTimeStarsList = document.getElementById("all-time-stars-list");
             weekStarsList.innerHTML = "";
             allTimeStarsList.innerHTML = "";
 
-            // Seçilen Haftanın Yıldızları
             const weeklyScores = userList.map(name => {
                 const userData = allTimeData[name];
                 const selectedWeekData = userData.weeklyScores.find(s => s.week === selectedWeekISO);
@@ -289,7 +286,6 @@
                 .filter(u => u.score === maxWeeklyScore && u.score > 0)
                 .sort((a, b) => a.name.localeCompare(b.name, 'tr'));
 
-            // Projenin Yıldızları (Genel Ortalama)
              const averageScores = userList.map(name => {
                 return { name: name, score: allTimeData[name].averageScore };
             });
@@ -320,7 +316,7 @@
             populateList(allTimeStarsList, projeninYildizlari, "Genel sıralamada henüz yıldız yok.");
         }
         
-        // Hafta seçicisini (herkes görebilir)
+        // Render Week Selector (Publicly viewable)
         function renderWeekSelector() {
             const selector = document.getElementById("week-selector");
             selector.innerHTML = "";
@@ -339,7 +335,7 @@
             selector.addEventListener("change", handleWeekChange);
         }
         
-        // Hafta değiştiğinde tabloları güncelle (herkes yapabilir)
+        // Handle week change event
         function handleWeekChange() {
             const selectedWeekISO = document.getElementById("week-selector").value;
             if (!selectedWeekISO) return;
@@ -347,60 +343,68 @@
             renderStarTables(allTimeDataCache, selectedWeekISO);
         }
         
-        // Arayüzü giriş/çıkış durumuna göre güncelle
+        // Update UI based on auth state
         function updateUIAfterAuth(userName) {
             const authButton = document.getElementById("auth-button");
             const authStatus = document.getElementById("auth-status");
             
             if(userName) {
-                // Giriş yapıldı
                 gCurrentRaterName = userName;
                 authButton.textContent = "Çıkış Yap";
                 authStatus.innerHTML = `Hoş geldiniz, <span class="font-bold">${userName}</span>`;
                 authStatus.classList.remove("hidden");
-                
-                // Puanlama formunu YÜKLE
                 renderRatingForm(); 
             } else {
-                // Çıkış yapıldı
                 gCurrentRaterName = null;
                 gCurrentUserEmail = null;
                 authButton.textContent = "Google ile Giriş Yap";
                 authStatus.classList.add("hidden");
-                
-                // Puanlama formunu GİZLE
                 document.getElementById("rating-form-container").classList.add("hidden"); 
             }
         }
 
+        // --- HELPER FOR AUTHORIZATION ---
+        async function checkUserAuthorization(email) {
+            try {
+                const userDocRef = doc(db, USER_DIRECTORY_PATH, email.toLowerCase());
+                const userDocSnap = await getDoc(userDocRef);
+
+                if (userDocSnap.exists()) {
+                    const matchedName = userDocSnap.data().name;
+                    gCurrentUserEmail = email;
+                    updateUIAfterAuth(matchedName);
+                } else {
+                    showToast(`Bu e-posta (${email}) yetkili değil.`, true);
+                    signOut(auth);
+                    updateUIAfterAuth(null);
+                }
+            } catch (error) {
+                console.error("Yetki kontrolü hatası:", error);
+                showToast("Giriş yapılırken yetki kontrol edilemedi.", true);
+                updateUIAfterAuth(null);
+            }
+        }
+
+
         // --- EVENT HANDLERS ---
         
-        // Google ile Giriş / Çıkış Yap Butonu
         async function handleAuthClick() {
             if (gCurrentRaterName) {
-                // Kullanıcı zaten giriş yapmış, ÇIKIŞ YAP
                 await signOut(auth);
-                // onAuthStateChanged bunu otomatik olarak algılayacak.
                 showToast("Başarıyla çıkış yapıldı.");
             } else {
-                // Kullanıcı giriş yapmamış, GİRİŞ YAP
                 try {
-                    await signInWithPopup(auth, provider);
-                    // onAuthStateChanged bunu algılayacak.
+                    await signInWithRedirect(auth, provider); 
                 } catch (error) {
-                    console.error("Google girişi sırasında hata:", error);
-                    if (error.code !== 'auth/popup-closed-by-user') {
-                         showToast("Google ile giriş yapılırken bir hata oluştu.", true);
-                    }
+                    console.error("Google yönlendirmesi sırasında hata:", error);
+                    showToast("Google'a yönlendirilirken bir hata oluştu.", true);
                 }
             }
         }
 
-        // Puanlama formunu gönder
         async function handleSubmit(e) {
             e.preventDefault();
             
-            // Sadece giriş yapanlar gönderebilir
             if (!gCurrentRaterName) {
                 showToast("Puanlama gönderebilmek için giriş yapmalısınız.", true);
                 return;
@@ -434,7 +438,6 @@
                     }
                 });
 
-                // Döküman ID'si giriş yapan kişinin adını içerir
                 const docId = `rating_${currentWeek}_by_${gCurrentRaterName.replace(/\s+/g, '_')}`;
                 const payload = {
                     rater: gCurrentRaterName,
@@ -443,7 +446,6 @@
                     submittedAt: new Date().toISOString()
                 };
 
-                // setDoc ile üzerine yazar (parçalı puanlamayı günceller)
                 const docRef = doc(db, RATING_COLLECTION_PATH, docId);
                 await setDoc(docRef, payload);
 
@@ -458,7 +460,6 @@
             }
         }
         
-        // Yardım penceresini aç/kapat
         function toggleHelpModal(show) {
             const modal = document.getElementById("help-modal");
             const modalBackdrop = document.getElementById("modal-backdrop");
@@ -471,14 +472,13 @@
             }
         }
         
-        // Dışarıya tıklayınca kapat (Popup Düzeltmesi)
         function handleModalClick(e) {
             if (e.target.id === "help-modal") {
                 toggleHelpModal(false);
             }
         }
 
-        // --- UYGULAMA BAŞLANGICI ---
+        // --- APPLICATION INITIALIZATION ---
 
         async function initApp() {
             try {
@@ -490,8 +490,6 @@
                 // Event Listeners
                 document.getElementById("rating-form").addEventListener("submit", handleSubmit);
                 document.getElementById("auth-button").addEventListener("click", handleAuthClick);
-                
-                // Modal (Yardım Penceresi) Event Listeners
                 document.getElementById("show-help-button").addEventListener("click", () => toggleHelpModal(true));
                 document.getElementById("modal-close-button").addEventListener("click", () => toggleHelpModal(false));
                 document.getElementById("help-modal").addEventListener("click", handleModalClick);
@@ -501,32 +499,27 @@
                     }
                 });
 
-                // Firebase Auth durumunu dinle (Ana Arayüz Yöneticisi)
-                onAuthStateChanged(auth, async (user) => {
-                    if (user && user.email) {
-                        const email = user.email.toLowerCase();
-                        // GİRİŞ YAPAN KULLANICININ ADINI VERİTABANINDAN SORGULA
-                        const userDocRef = doc(db, USER_DIRECTORY_PATH, email);
-                        const userDocSnap = await getDoc(userDocRef);
-
-                        if (userDocSnap.exists()) {
-                            // Başarılı: E-posta, 'user_directory' listesinde bulundu
-                            const matchedName = userDocSnap.data().name;
-                            gCurrentUserEmail = user.email;
-                            updateUIAfterAuth(matchedName);
-                        } else {
-                            // Hata: E-posta yetkili değil
-                            showToast(`Bu e-posta (${user.email}) yetkili değil.`, true);
-                            signOut(auth);
-                            updateUIAfterAuth(null);
-                        }
+                // === REDIRECT METHOD AUTH CHECK ===
+                try {
+                    const result = await getRedirectResult(auth);
+                    
+                    if (result && result.user && result.user.email) {
+                        await checkUserAuthorization(result.user.email);
                     } else {
-                        // Kullanıcı giriş yapmamış veya e-postası yok
-                        updateUIAfterAuth(null);
+                        onAuthStateChanged(auth, (user) => {
+                            if (user && user.email) {
+                                checkUserAuthorization(user.email);
+                            } else {
+                                updateUIAfterAuth(null);
+                            }
+                        });
                     }
-                });
+                } catch (error) {
+                    console.error("Giriş yönlendirmesi hatası:", error);
+                    showToast("Giriş yapılırken bir hata oluştu.", true);
+                }
+                // ==========================================================
                 
-                // Puan tablolarını herkesin görmesi için veri dinleyicisini hemen başlat
                 subscribeToRatings(); 
 
             } catch (error) {
@@ -535,7 +528,7 @@
             }
         }
 
-        // Veritabanındaki değişiklikleri dinler ve arayüzü günceller.
+        // Subscribe to Firestore changes
         function subscribeToRatings() {
             const q = collection(db, RATING_COLLECTION_PATH);
             
@@ -544,19 +537,14 @@
 
             onSnapshot(q, (snapshot) => {
                 allRatingsData = snapshot.docs;
-                // Hafta etiketlerini oluştur
                 createWeekMapping(allRatingsData);
-                // Tüm veriyi işle
                 const allTimeData = processData(allRatingsData);
-                // Hafta seçicisini doldur
                 renderWeekSelector();
                 
-                // Seçili olan haftaya göre tabloları çiz
                 const selectedWeekISO = document.getElementById("week-selector").value;
                 renderResultsTable(allTimeData, selectedWeekISO);
                 renderStarTables(allTimeData, selectedWeekISO);
                 
-                // Yükleniyor ekranını gizle
                 document.getElementById("loading-indicator").classList.add("hidden");
                 document.getElementById("results-content").classList.remove("hidden");
 
@@ -567,13 +555,11 @@
             });
         }
 
-        // DOM yüklendiğinde uygulamayı başlat
         document.addEventListener("DOMContentLoaded", initApp);
-
     </script>
     
     <style>
-        /* Tıklama ve Odaklanma efektlerini temizle (Mobil ve PC) */
+        /* CSS to clean up browser focus/tap highlighting */
         input[type="radio"].hidden:focus + label {
             outline: 2px solid transparent;
             outline-offset: 2px;
@@ -635,9 +621,9 @@
                                     <tr>
                                         <th class="py-3 px-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Kişi</th>
                                         <th class="py-3 px-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" title="Toplantıya Katılım (1)">Toplantıya Katılım</th>
-                                        <th class="py-3 px-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" title="Zorunlu Görev (1)">Zorunlu Görev</th>
+                                        <th class="py-3 px-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" title="Zorunlu Görev (1.25)">Zorunlu Görev</th>
                                         <th class="py-3 px-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" title="Ekstra Görev (0.75)">Ekstra Görev</th>
-                                        <th class="py-3 px-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" title="Görev Desteği (0.75)">Görev Desteği</th>
+                                        <th class="py-3 px-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" title="Görev Desteği (0.5)">Görev Desteği</th>
                                         <th class="py-3 px-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" title="Bilgi Paylaşımı (0.5)">Bilgi Paylaşımı</th>
                                     </tr>
                                 </thead>
@@ -731,13 +717,9 @@
     </div>
     
     <!-- Nasıl Kullanılır? Modal (Pencere) -->
-    <!-- Arka plan (dışarıya tıklayınca kapatmak için) -->
     <div id="modal-backdrop" class="fixed inset-0 bg-black/30 backdrop-blur-sm hidden z-40" aria-hidden="true"></div>
-    
-    <!-- Dış Konteyner (Dışarıya tıklama olayını yakalar) -->
     <div id="help-modal" class="fixed inset-0 z-50 flex justify-center p-4 hidden overflow-y-auto" onclick="handleModalClick(event)">
         
-        <!-- İçerik Kutusu (Tıklamayı engeller) -->
         <div class="bg-white w-full max-w-2xl rounded-lg shadow-2xl p-6 relative my-8 h-fit" onclick="event.stopPropagation()">
             
             <button id="modal-close-button" class="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
