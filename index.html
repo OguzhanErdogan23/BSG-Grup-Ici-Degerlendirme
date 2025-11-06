@@ -8,7 +8,6 @@
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     
-    <!-- YENİ FAVICON (Mavi Dijital Kalkan) -->
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='currentColor'><path fill-rule='evenodd' d='M10 1.944A11.954 11.954 0 002.5 6.452V9.33a.75.75 0 00.316.626l6.834 4.556a.75.75 0 00.898 0l6.834-4.556A.75.75 0 0017.5 9.33V6.452A11.954 11.954 0 0010 1.944zm0 1.556a10.454 10.454 0 00-6.184 2.846L10 10.93l6.184-4.584A10.454 10.454 0 0010 3.5zM4 7.231l6 4.444 6-4.444v2.099l-5.684 3.79a.75.75 0 01-.898 0L4 9.33V7.231z' fill='%232563EB' clip-rule='evenodd'/></svg>" type="image/svg+xml">
     
     <title>BSG Grup İçi Değerlendirme</title>
@@ -16,14 +15,15 @@
     <script type="module">
         // Firebase Modülleri
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        // *** POPUP SİSTEMİNE GERİ DÖNÜLDÜ ***
         import { 
             getAuth, 
             onAuthStateChanged, 
             GoogleAuthProvider, 
-            signInWithPopup, // 'signInWithRedirect' yerine 'signInWithPopup'
-            signOut
-            // 'getRedirectResult', 'setPersistence' ve 'browserSessionPersistence' KALDIRILDI
+            signInWithRedirect, 
+            getRedirectResult, 
+            signOut,
+            setPersistence,           
+            browserSessionPersistence 
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, doc, setDoc, onSnapshot, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
@@ -46,6 +46,7 @@
         
         let gCurrentRaterName = null; 
         let gCurrentUserEmail = null; 
+        let isAuthReady = false; 
 
         // Veri Yolları
         const RATING_COLLECTION_PATH = `artifacts/${appId}/public/data/ratings`;
@@ -375,7 +376,11 @@
                 }
             } catch (error) {
                 console.error("Yetki kontrolü hatası:", error);
-                showToast("Giriş yapılırken yetki kontrol edilemedi.", true);
+                // "Zamanlama" hatasından (request.auth'un henüz hazır olmaması) kaynaklanan 
+                // "permission-denied" hatasını görmezden gel.
+                if (error.code !== 'permission-denied') {
+                    showToast("Giriş yapılırken yetki kontrol edilemedi.", true);
+                }
                 signOut(auth);
                 updateUIAfterAuth(null);
             }
@@ -390,17 +395,17 @@
                 await signOut(auth);
                 showToast("Başarıyla çıkış yapıldı.");
             } else {
-                // Kullanıcı giriş yapmamış, GİRİŞ YAP (POPUP)
+                // Kullanıcı giriş yapmamış, GİRİŞ YAP (YÖNLENDİRME)
                 try {
-                    // signInWithPopup'ı çağır
-                    await signInWithPopup(auth, provider);
-                    // onAuthStateChanged (aşağıda) girişi otomatik olarak algılayacak
+                    // *** GİRİŞ HATASI DÜZELTMESİ (Persistence) ***
+                    // Tarayıcının yönlendirme sonrası girişi hatırlaması için
+                    // depolamayı 'session' (oturum) olarak ayarla.
+                    await setPersistence(auth, browserSessionPersistence); // Düzeltme
+                    // Yönlendirmeyi başlat
+                    await signInWithRedirect(auth, provider); 
                 } catch (error) {
-                    console.error("Google Popup girişi sırasında hata:", error);
-                    // Kullanıcı popup'ı kapatırsa (auth/popup-closed-by-user) sessiz kal
-                    if (error.code !== 'auth/popup-closed-by-user') {
-                         showToast("Google ile giriş yapılırken bir hata oluştu.", true);
-                    }
+                    console.error("Google yönlendirmesi sırasında hata:", error);
+                    showToast("Google'a yönlendirilirken bir hata oluştu.", true);
                 }
             }
         }
@@ -481,7 +486,7 @@
             }
         }
 
-        // --- UYGULAMA BAŞLANGICI (POPUP SİSTEMİ) ---
+        // --- UYGULAMA BAŞLANGICI (Zamanlama Hatası Düzeltildi) ---
 
         async function initApp() {
             try {
@@ -490,13 +495,6 @@
                 auth = getAuth(app);
                 provider = new GoogleAuthProvider();
                 
-                // *** POPUP HATASI (COOP) ÇÖZÜMÜ ***
-                // Google'a, hesap seçme ekranını göstermesi için
-                // özel bir parametre göndererek tarayıcı güvenlik politikasını aş.
-                provider.setCustomParameters({
-                    'prompt': 'select_account'
-                });
-
                 // 1. Tüm Buton Dinleyicilerini Kur
                 document.getElementById("rating-form").addEventListener("submit", handleSubmit);
                 document.getElementById("auth-button").addEventListener("click", handleAuthClick);
@@ -510,9 +508,11 @@
                 });
 
                 // 2. Auth Durumunu YÖNETEN ANA FONKSİYON
-                // Bu fonksiyon, hem popup'tan dönüşü
-                // hem de normal sayfa ziyaretlerini (zaten giriş yapmış) yakalar.
                 onAuthStateChanged(auth, (user) => {
+                    if (!isAuthReady) {
+                        return;
+                    }
+
                     if (user && user.email) {
                         // Kullanıcı giriş yaptı. Yetkisini kontrol et.
                         checkUserAuthorization(user.email);
@@ -521,8 +521,24 @@
                         updateUIAfterAuth(null);
                     }
                 });
+
+                // 3. YÖNLENDİRME (REDIRECT) SONUCUNU KONTROL ET
+                try {
+                    const result = await getRedirectResult(auth);
+                    isAuthReady = true; // Auth durumu artık hazır
+                    
+                    if (result && result.user && result.user.email) {
+                        checkUserAuthorization(result.user.email);
+                    } else {
+                    }
+                } catch (error) {
+                    isAuthReady = true; // Hata olsa bile Auth hazır
+                    console.error("Giriş yönlendirmesi hatası:", error);
+                    showToast("Giriş yapılırken bir hata oluştu: " + error.code, true);
+                    updateUIAfterAuth(null);
+                }
                 
-                // 3. Veritabanını DİNLE (Herkes için)
+                // 4. Veritabanını DİNLE (Herkes için)
                 subscribeToRatings(); 
 
             } catch (error) {
