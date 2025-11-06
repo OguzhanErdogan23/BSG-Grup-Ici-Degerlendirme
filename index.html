@@ -16,24 +16,21 @@
     <script type="module">
         // Firebase Modülleri
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        // *** POPUP SİSTEMİNE GERİ DÖNÜLDÜ ***
+        // POPUP SİSTEMİ
         import { 
             getAuth, 
             onAuthStateChanged, 
             GoogleAuthProvider, 
-            signInWithPopup, // 'signInWithRedirect' yerine 'signInWithPopup'
+            signInWithPopup,
             signOut
-            // 'getRedirectResult' ve 'setPersistence' KALDIRILDI
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, doc, setDoc, onSnapshot, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // --- GLOBAL DEĞİŞKENLER ---
         const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
             apiKey: "AIzaSyAGo1xQfMUvDMzcnWQLrTAA_zGTB_h96Jk",
-            // *** POPUP HATASI (COOP) ÇÖZÜMÜ ***
-            // authDomain, Firebase'in varsayılanı yerine SİZİN SİTENİZİN ADRESİ olmalı.
-            authDomain: "oguzhanerdogan23.github.io", 
-            // **********************************
+            // *** authDomain ORİJİNAL HALİNE DÖNDÜRÜLDÜ (404 Hata Düzeltmesi) ***
+            authDomain: "bsg-grup-ici-degerlendirme.firebaseapp.com", 
             projectId: "bsg-grup-ici-degerlendirme",
             storageBucket: "bsg-grup-ici-degerlendirme.firebasestorage.app",
             messagingSenderId: "36504836557",
@@ -498,6 +495,12 @@
                 // provider.setCustomParameters({
                 //     'prompt': 'select_account'
                 // });
+                // *** DÜZELTME: COOP hatası 404'e dönüştüğü için,
+                // authDomain'i geri aldık ve bu parametreyi geri getirdik. ***
+                provider.setCustomParameters({
+                    'prompt': 'select_account'
+                });
+
 
                 // 1. Tüm Buton Dinleyicilerini Kur
                 document.getElementById("rating-form").addEventListener("submit", handleSubmit);
@@ -541,7 +544,7 @@
             onSnapshot(q, (snapshot) => {
                 allRatingsData = snapshot.docs;
                 createWeekMapping(allRatingsData);
-                const allTimeData = processData(allRatingsData);
+                const allTimeData = processData(allTimeData);
                 renderWeekSelector();
                 
                 const selectedWeekISO = document.getElementById("week-selector").value;
