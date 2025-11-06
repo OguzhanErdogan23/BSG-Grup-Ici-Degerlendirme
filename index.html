@@ -14,22 +14,23 @@
     <title>BSG Grup İçi Değerlendirme</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script type="module">
-        // Firebase Modules
+        // Firebase Modülleri
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        // 'signInWithRedirect' and 'getRedirectResult' imported
+        // 'sessionAuthPersistence' ve 'setPersistence' GİRİŞ HATASI ÇÖZÜMÜ İÇİN EKLENDİ
         import { 
             getAuth, 
             onAuthStateChanged, 
             GoogleAuthProvider, 
             signInWithRedirect, 
             getRedirectResult, 
-            signOut 
+            signOut,
+            setPersistence,           // EKLENDİ (Oturum Düzeltmesi)
+            sessionAuthPersistence  // EKLENDİ (Oturum Düzeltmesi)
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, doc, setDoc, onSnapshot, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // --- GLOBAL VARIABLES ---
+        // --- GLOBAL DEĞİŞKENLER ---
         const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
-            // YOUR ACTUAL FIREBASE CONFIG
             apiKey: "AIzaSyAGo1xQfMUvDMzcnWQLrTAA_zGTB_h96Jk",
             authDomain: "bsg-grup-ici-degerlendirme.firebaseapp.com",
             projectId: "bsg-grup-ici-degerlendirme",
@@ -47,30 +48,30 @@
         
         let gCurrentRaterName = null; 
         let gCurrentUserEmail = null; 
-        let isAuthReady = false; // Auth durumunun hazır olup olmadığını kontrol eder
+        let isAuthReady = false;
 
-        // Data Paths
+        // Veri Yolları
         const RATING_COLLECTION_PATH = `artifacts/${appId}/public/data/ratings`;
-        const USER_DIRECTORY_PATH = `user_directory`; // Path to the secure, hidden email list
+        const USER_DIRECTORY_PATH = `user_directory`; 
 
-        // Group Members (for rendering tables and forms)
+        // Gruptaki Kişiler (Sadece Puanlama ve Tablolar için)
         const userList = [
             "Enes Malik Arı", "İbrahim Kerem Güven", "Oğuzhan Erdoğan", 
             "Özgün Deniz Sevilmiş", "Selanur Ayaz", "Semih Tepe", "Sena Ateş", 
             "Sude Demir", "Sudem Cücemen", "Şerif Bayram", "Uğur Berktaş"
         ].sort((a, b) => a.localeCompare(b, 'tr'));
 
-        // Scoring Criteria and Weights (UPDATED)
+        // Puanlama Kriterleri ve Ağırlıkları
         const criteria = [
             { id: "katilim", name: "Toplantıya Katılım", weight: 1 },
-            { id: "zorunlu", name: "Zorunlu Görev", weight: 1.25 }, // Weight 1.25
+            { id: "zorunlu", name: "Zorunlu Görev", weight: 1.25 },
             { id: "ekstra", name: "Ekstra Görev", weight: 0.75 },
-            { id: "yardim", name: "Görev Desteği", weight: 0.5 }, // Weight 0.5
+            { id: "yardim", name: "Görev Desteği", weight: 0.5 },
             { id: "bilgi", name: "Bilgi Paylaşımı", weight: 0.5 }
         ];
         const totalWeight = criteria.reduce((sum, c) => sum + c.weight, 0);
 
-        // --- UTILITY FUNCTIONS ---
+        // --- UTILITY FONKSİYONLARI ---
 
         function getCurrentWeekISO() {
             const date = new Date();
@@ -110,14 +111,13 @@
             availableWeeks.forEach((week, index) => {
                 weekMapping[week] = `${index + 1}. Hafta`;
             });
-            // Giriş yapılmamışsa bu etiket gizli kalabilir, sorun değil
             const currentWeekLabel = document.getElementById("current-week-label");
             if (currentWeekLabel) {
                 currentWeekLabel.textContent = weekMapping[currentWeek] || "Hafta Etiketi Yok";
             }
         }
 
-        // --- CORE DATA PROCESSING LOGIC ---
+        // --- ANA VERİ İŞLEME MANTIĞI ---
 
         function processData(ratingDocs) {
             const ratingsByWeek = {};
@@ -184,7 +184,7 @@
             return allTimeData;
         }
 
-        // --- UI RENDERING FUNCTIONS ---
+        // --- ARAYÜZ GÜNCELLEME (RENDER) FONKSİYONLARI ---
 
         async function renderRatingForm() {
             if (!gCurrentRaterName) { 
@@ -200,7 +200,6 @@
             formContainer.classList.remove("hidden");
             submitButton.disabled = false;
             
-            // Fetch previous votes for partial scoring/editing
             const currentWeek = getCurrentWeekISO();
             const docId = `rating_${currentWeek}_by_${gCurrentRaterName.replace(/\s+/g, '_')}`;
             const docRef = doc(db, RATING_COLLECTION_PATH, docId);
@@ -251,7 +250,6 @@
             });
         }
 
-        // Render Results Table (Publicly viewable)
         function renderResultsTable(allTimeData, selectedWeekISO) {
             const tableBody = document.getElementById("results-table-body");
             tableBody.innerHTML = "";
@@ -274,7 +272,6 @@
             });
         }
 
-        // Render Star Tables (Publicly viewable)
         function renderStarTables(allTimeData, selectedWeekISO) {
             const weekStarsList = document.getElementById("week-stars-list");
             const allTimeStarsList = document.getElementById("all-time-stars-list");
@@ -321,7 +318,6 @@
             populateList(allTimeStarsList, projeninYildizlari, "Genel sıralamada henüz yıldız yok.");
         }
         
-        // Render Week Selector (Publicly viewable)
         function renderWeekSelector() {
             const selector = document.getElementById("week-selector");
             selector.innerHTML = "";
@@ -340,7 +336,6 @@
             selector.addEventListener("change", handleWeekChange);
         }
         
-        // Handle week change event
         function handleWeekChange() {
             const selectedWeekISO = document.getElementById("week-selector").value;
             if (!selectedWeekISO) return;
@@ -348,7 +343,6 @@
             renderStarTables(allTimeDataCache, selectedWeekISO);
         }
         
-        // Update UI based on auth state
         function updateUIAfterAuth(userName) {
             const authButton = document.getElementById("auth-button");
             const authStatus = document.getElementById("auth-status");
@@ -368,10 +362,8 @@
             }
         }
 
-        // --- HELPER FOR AUTHORIZATION ---
         async function checkUserAuthorization(email) {
             try {
-                // Auth durumu hazır olduğunda, veritabanından ismi sorgula
                 const userDocRef = doc(db, USER_DIRECTORY_PATH, email.toLowerCase());
                 const userDocSnap = await getDoc(userDocRef);
 
@@ -385,7 +377,6 @@
                     updateUIAfterAuth(null);
                 }
             } catch (error) {
-                // Bu hata genellikle Güvenlik Kuralı hatasıdır (zamanlama değil)
                 console.error("Yetki kontrolü hatası:", error);
                 showToast("Giriş yapılırken yetki kontrol edilemedi.", true);
                 signOut(auth);
@@ -398,10 +389,17 @@
         
         async function handleAuthClick() {
             if (gCurrentRaterName) {
+                // Kullanıcı zaten giriş yapmış, ÇIKIŞ YAP
                 await signOut(auth);
                 showToast("Başarıyla çıkış yapıldı.");
             } else {
+                // Kullanıcı giriş yapmamış, GİRİŞ YAP
                 try {
+                    // *** GİRİŞ HATASI DÜZELTMESİ (Persistence) ***
+                    // Tarayıcının yönlendirme sonrası girişi hatırlaması için
+                    // depolamayı 'session' (oturum) olarak ayarla.
+                    await setPersistence(auth, sessionAuthPersistence); 
+                    // Yönlendirmeyi başlat
                     await signInWithRedirect(auth, provider); 
                 } catch (error) {
                     console.error("Google yönlendirmesi sırasında hata:", error);
@@ -486,7 +484,7 @@
             }
         }
 
-        // --- APPLICATION INITIALIZATION (YENİDEN DÜZENLENDİ) ---
+        // --- UYGULAMA BAŞLANGICI (Zamanlama Hatası Düzeltildi) ---
 
         async function initApp() {
             try {
@@ -525,11 +523,12 @@
                 // Sayfa yüklendiğinde, Google'dan bir yönlendirme olup olmadığını
                 // kontrol et. Bu, onAuthStateChanged'i tetikleyecektir.
                 try {
+                    // 'isAuthReady' (yukarıda) 'true' olana kadar
+                    // 'getRedirectResult' beklemeyecek.
                     await getRedirectResult(auth);
                     // Bu fonksiyonun 'result'ını kullanmamıza gerek yok,
                     // çünkü onAuthStateChanged (yukarıda) tüm işi yapacak.
                 } catch (error) {
-                    // Yönlendirme hatası (örn: API anahtarı sorunu)
                     console.error("Giriş yönlendirmesi hatası:", error);
                     showToast("Giriş yapılırken bir hata oluştu: " + error.code, true);
                     updateUIAfterAuth(null);
@@ -558,7 +557,7 @@
                 renderWeekSelector();
                 
                 const selectedWeekISO = document.getElementById("week-selector").value;
-                if(selectedWeekISO) { // Sadece hafta seçici dolduktan sonra render et
+                if(selectedWeekISO) { 
                     renderResultsTable(allTimeData, selectedWeekISO);
                     renderStarTables(allTimeData, selectedWeekISO);
                 }
