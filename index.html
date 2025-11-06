@@ -47,6 +47,7 @@
         
         let gCurrentRaterName = null; 
         let gCurrentUserEmail = null; 
+        let isAuthReady = false; // Auth durumunun hazır olup olmadığını kontrol eder
 
         // Data Paths
         const RATING_COLLECTION_PATH = `artifacts/${appId}/public/data/ratings`;
@@ -62,9 +63,9 @@
         // Scoring Criteria and Weights (UPDATED)
         const criteria = [
             { id: "katilim", name: "Toplantıya Katılım", weight: 1 },
-            { id: "zorunlu", name: "Zorunlu Görev", weight: 1.25 },
+            { id: "zorunlu", name: "Zorunlu Görev", weight: 1.25 }, // Weight 1.25
             { id: "ekstra", name: "Ekstra Görev", weight: 0.75 },
-            { id: "yardim", name: "Görev Desteği", weight: 0.5 },
+            { id: "yardim", name: "Görev Desteği", weight: 0.5 }, // Weight 0.5
             { id: "bilgi", name: "Bilgi Paylaşımı", weight: 0.5 }
         ];
         const totalWeight = criteria.reduce((sum, c) => sum + c.weight, 0);
@@ -109,7 +110,11 @@
             availableWeeks.forEach((week, index) => {
                 weekMapping[week] = `${index + 1}. Hafta`;
             });
-            document.getElementById("current-week-label").textContent = weekMapping[currentWeek] || "Hafta Etiketi Yok";
+            // Giriş yapılmamışsa bu etiket gizli kalabilir, sorun değil
+            const currentWeekLabel = document.getElementById("current-week-label");
+            if (currentWeekLabel) {
+                currentWeekLabel.textContent = weekMapping[currentWeek] || "Hafta Etiketi Yok";
+            }
         }
 
         // --- CORE DATA PROCESSING LOGIC ---
@@ -366,6 +371,7 @@
         // --- HELPER FOR AUTHORIZATION ---
         async function checkUserAuthorization(email) {
             try {
+                // Auth durumu hazır olduğunda, veritabanından ismi sorgula
                 const userDocRef = doc(db, USER_DIRECTORY_PATH, email.toLowerCase());
                 const userDocSnap = await getDoc(userDocRef);
 
@@ -379,8 +385,10 @@
                     updateUIAfterAuth(null);
                 }
             } catch (error) {
+                // Bu hata genellikle Güvenlik Kuralı hatasıdır (zamanlama değil)
                 console.error("Yetki kontrolü hatası:", error);
                 showToast("Giriş yapılırken yetki kontrol edilemedi.", true);
+                signOut(auth);
                 updateUIAfterAuth(null);
             }
         }
@@ -478,7 +486,7 @@
             }
         }
 
-        // --- APPLICATION INITIALIZATION ---
+        // --- APPLICATION INITIALIZATION (YENİDEN DÜZENLENDİ) ---
 
         async function initApp() {
             try {
@@ -487,7 +495,7 @@
                 auth = getAuth(app);
                 provider = new GoogleAuthProvider();
                 
-                // Event Listeners
+                // 1. Tüm Buton Dinleyicilerini Kur
                 document.getElementById("rating-form").addEventListener("submit", handleSubmit);
                 document.getElementById("auth-button").addEventListener("click", handleAuthClick);
                 document.getElementById("show-help-button").addEventListener("click", () => toggleHelpModal(true));
@@ -499,27 +507,35 @@
                     }
                 });
 
-                // === REDIRECT METHOD AUTH CHECK ===
-                try {
-                    const result = await getRedirectResult(auth);
-                    
-                    if (result && result.user && result.user.email) {
-                        await checkUserAuthorization(result.user.email);
+                // 2. Auth Durumunu YÖNETEN ANA FONKSİYON
+                // Bu fonksiyon, hem yönlendirmeden (redirect) dönüşü
+                // hem de normal sayfa ziyaretlerini (zaten giriş yapmış) yakalar.
+                onAuthStateChanged(auth, (user) => {
+                    isAuthReady = true; // Auth durumu kontrol edildi
+                    if (user && user.email) {
+                        // Kullanıcı giriş yaptı. Yetkisini kontrol et.
+                        checkUserAuthorization(user.email);
                     } else {
-                        onAuthStateChanged(auth, (user) => {
-                            if (user && user.email) {
-                                checkUserAuthorization(user.email);
-                            } else {
-                                updateUIAfterAuth(null);
-                            }
-                        });
+                        // Kullanıcı giriş yapmamış.
+                        updateUIAfterAuth(null);
                     }
+                });
+
+                // 3. YÖNLENDİRME (REDIRECT) SONUCUNU KONTROL ET
+                // Sayfa yüklendiğinde, Google'dan bir yönlendirme olup olmadığını
+                // kontrol et. Bu, onAuthStateChanged'i tetikleyecektir.
+                try {
+                    await getRedirectResult(auth);
+                    // Bu fonksiyonun 'result'ını kullanmamıza gerek yok,
+                    // çünkü onAuthStateChanged (yukarıda) tüm işi yapacak.
                 } catch (error) {
+                    // Yönlendirme hatası (örn: API anahtarı sorunu)
                     console.error("Giriş yönlendirmesi hatası:", error);
-                    showToast("Giriş yapılırken bir hata oluştu.", true);
+                    showToast("Giriş yapılırken bir hata oluştu: " + error.code, true);
+                    updateUIAfterAuth(null);
                 }
-                // ==========================================================
                 
+                // 4. Veritabanını DİNLE (Herkes için)
                 subscribeToRatings(); 
 
             } catch (error) {
@@ -542,8 +558,10 @@
                 renderWeekSelector();
                 
                 const selectedWeekISO = document.getElementById("week-selector").value;
-                renderResultsTable(allTimeData, selectedWeekISO);
-                renderStarTables(allTimeData, selectedWeekISO);
+                if(selectedWeekISO) { // Sadece hafta seçici dolduktan sonra render et
+                    renderResultsTable(allTimeData, selectedWeekISO);
+                    renderStarTables(allTimeData, selectedWeekISO);
+                }
                 
                 document.getElementById("loading-indicator").classList.add("hidden");
                 document.getElementById("results-content").classList.remove("hidden");
