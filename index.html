@@ -29,8 +29,7 @@
         // --- GLOBAL DEĞİŞKENLER ---
         const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
             apiKey: "AIzaSyAGo1xQfMUvDMzcnWQLrTAA_zGTB_h96Jk",
-            // *** authDomain ORİJİNAL HALİNE DÖNDÜRÜLDÜ (404 Hata Düzeltmesi) ***
-            authDomain: "bsg-grup-ici-degerlendirme.firebaseapp.com", 
+            authDomain: "bsg-grup-ici-degerlendirme.firebaseapp.com",
             projectId: "bsg-grup-ici-degerlendirme",
             storageBucket: "bsg-grup-ici-degerlendirme.firebasestorage.app",
             messagingSenderId: "36504836557",
@@ -490,17 +489,11 @@
                 provider = new GoogleAuthProvider();
                 
                 // *** POPUP HATASI (COOP) ÇÖZÜMÜ ***
-                // authDomain (config'de) değiştirildiği için
-                // bu özel parametreye artık GEREK YOK.
-                // provider.setCustomParameters({
-                //     'prompt': 'select_account'
-                // });
-                // *** DÜZELTME: COOP hatası 404'e dönüştüğü için,
-                // authDomain'i geri aldık ve bu parametreyi geri getirdik. ***
+                // Google'a, hesap seçme ekranını göstermesi için
+                // özel bir parametre göndererek tarayıcı güvenlik politikasını aş.
                 provider.setCustomParameters({
                     'prompt': 'select_account'
                 });
-
 
                 // 1. Tüm Buton Dinleyicilerini Kur
                 document.getElementById("rating-form").addEventListener("submit", handleSubmit);
@@ -544,7 +537,7 @@
             onSnapshot(q, (snapshot) => {
                 allRatingsData = snapshot.docs;
                 createWeekMapping(allRatingsData);
-                const allTimeData = processData(allTimeData);
+                const allTimeData = processData(allRatingsData);
                 renderWeekSelector();
                 
                 const selectedWeekISO = document.getElementById("week-selector").value;
